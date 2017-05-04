@@ -1,56 +1,80 @@
 {-# language BangPatterns #-}
+{-# language DeriveGeneric #-}
+{-# language LambdaCase #-}
 {-# language OverloadedStrings #-}
 
 module Network.IPLD.Internal where
 
 import Prelude hiding (takeWhile)
+
+import Control.Applicative
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
-import Data.Maybe (fromJust)
+import Data.Monoid ((<>))
 import Data.String
 import Data.Text (Text)
 import Data.Vector (Vector)
 import qualified Data.Vector as V
-import Network.Multiaddr
+import GHC.Generics
+import Network.Multiaddr hiding (encode, decode)
 
 import Data.Attoparsec.Text
 
-import qualified Data.Binary.Serialise.CBOR.Read     as CBOR.Read
-import qualified Data.Binary.Serialise.CBOR.Write    as CBOR.Write
+import           Data.Binary.Serialise.CBOR.Class
 import           Data.Binary.Serialise.CBOR.Encoding
 import           Data.Binary.Serialise.CBOR.Decoding
 
-import           Data.Binary.Serialise.CBOR.Class
+-- $coding
+--
+-- The key here is adhering to the cbor standard specified in the ipld spec
 
 cborTagLink :: Word
 cborTagLink = 42
 
--- instance Serialise MerkleLink where
---   -- encode :: MerkleLink -> Encoding
---   encode (MerkleLink loc) = encodeTag cborTagLink -- <>
+instance Serialise MerkleLink where
+  encode (MerkleLink loc) = encodeTag cborTagLink <> encodeAddr loc
+    where encodeAddr addr = case parts addr of
+            [IPFS addr'] -> encodeBytes addr'
+            _ -> error $ "invalid link addr: " ++ show addr
 
--- instance Serialise Row where
--- instance Serialise Value where
+  decode = decodeTag *> decodeAddr
+    where decodeAddr = undefined
+
+instance Serialise Value where
+  encode = \case
+    LinkValue link -> encode link
+    TextValue text -> encode text
+    DagObject hmap -> encode hmap
+    DagArray  arr  -> encode arr
+
+  decode = do
+    tkty <- peekTokenType
+    case tkty of
+      TypeTag -> do
+        _tag <- decodeTag
+        LinkValue <$> decode
+      TypeString -> TextValue <$> decode
+      TypeListLen -> DagArray <$> decode
+      TypeMapLen -> DagObject <$> decode
+      _ -> fail $ "unexpected CBOR token type for IPLD value: " ++ show tkty
 
 data Hierarchy = Ipfs
 
--- TODO: user multihash (or cryptonite?) here
--- TODO: Should we require /ipfs/ prefix?
 newtype MerkleLink = MerkleLink Multiaddr -- MultihashDigest
-
--- TODO: check validity
--- instance IsString MerkleLink where
---   fromString = MerkleLink . fromString
+  deriving (Eq, Show, Generic)
 
 data Row
   = LinkRow MerkleLink
   | ValueRow Text Value
+  deriving (Eq, Show, Generic)
 
 data Value
   = LinkValue MerkleLink
-  | TextValue Text
+  | TextValue Text -- TODO should this be a bytestring?
   | DagObject (HashMap Text Value)
   | DagArray (Vector Value)
+  -- Should there also be number, bool, null?
+  deriving (Eq, Show, Generic)
 
 instance IsString Value where
   fromString = TextValue . fromString
@@ -59,6 +83,7 @@ instance IsString Value where
 -- * merkle-link
 -- * path traversal
 data MerklePath = MerklePath MerkleLink [Text]
+  deriving Show
 
 data TraversalResult
   = Found Value
@@ -66,8 +91,16 @@ data TraversalResult
   | KeyNotFound MerklePath
 
 traversePath :: MerklePath -> Value -> TraversalResult
-traversePath (MerklePath link []) v = Found v
-traversePath (MerklePath link (a:as)) v = undefined
+traversePath (MerklePath _link []) v = Found v
+traversePath path@(MerklePath link (a:as)) (DagArray vals) =
+  undefined
+  -- let foo = do
+  --       i <- readMay a
+  --       vals ^? ix i
+  -- in case foo of
+  --      Just val -> Found _
+  --      Nothing -> KeyNotFound path
+
 
 (.=) :: Text -> Value -> Row
 (.=) = ValueRow
@@ -83,87 +116,56 @@ object = DagObject . HashMap.fromList . map makeTuple where
 array :: [Value] -> Value
 array = DagArray . V.fromList
 
-merkleLink :: Text -> Maybe Value
-merkleLink text = LinkValue . MerkleLink <$> readMultiaddr text
+merkleLink :: Text -> Maybe MerkleLink
+merkleLink text = MerkleLink <$> readMultiaddr text
 
--- examples:
+merkleLink' :: Text -> Maybe Value
+merkleLink' text = LinkValue <$> merkleLink text
 
-linkExample :: MerkleLink
-linkExample = fromJust $ MerkleLink <$> readMultiaddr "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k"
-
-fooBazExample :: Value
-fooBazExample = object
-  [ "bar" .= "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k" -- not a link
-  , "baz" .= LinkValue linkExample -- link
-  ]
-
-catPhotoExample :: Value
-catPhotoExample = object
-  [ "files" .= object
-    [ "cat.jpg" .= object
-      [ LinkRow linkExample
-      , "mode" .= "0755"
-      , "owner" .= "jbenet"
-      ]
-    ]
-  ]
-
-chunkedFileExample :: Value
-chunkedFileExample = object
-  [ "size" .= "1424119"
-  , "subfiles" .= array
-    [ object
-      [
-        -- "link" .= merkleLink "QmAAA...",
-        "size" .= "100324"
-      ]
-    , object
-      [
-        -- "link" .= merkleLink "QmAA1...",
-        "size" .= "120345",
-        "repeat" .= "10"
-      ]
-    , object
-      [
-        -- "link" .= merkleLink "QmAA1...",
-        "size" .= "120345"
-      ]
-    ]
-  ]
+-- $parsing
 
 -- eg:
 --   "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/c"
 --   ->
 --   MerklePath ["QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k", "a", "b", "c"]
 --
--- TODO: probably use attoparsec
-merklePath :: Text -> Maybe MerklePath
-merklePath = undefined
-
--- pathExample1 = MerklePath "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k" ["a", "b", "c"]
-pathExample2 = merklePath "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/link/c"
-pathExample3 = merklePath "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/link/d/e"
-pathExample4 = merklePath "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/link/foo/name"
-pathExample5 = merklePath "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/foo/name"
-
--- $parsing
+merklePath :: Text -> Either String MerklePath
+merklePath = parseOnly parseMerklePath
 
 parseMerklePath :: Parser MerklePath
 parseMerklePath = do
   link <- parseMerkleLink
-  traversal <- do
-    _ <- try $ char '/'
-    takeWhile (not . (==) '/') `sepBy` (char '/')
+  traversal <- (do
+    _ <- char '/'
+    takeWhile (not . (== '/')) `sepBy` (char '/')
+    ) <|> pure []
   pure (MerklePath link traversal)
 
+-- "currently, only the ipfs hierarchy is allowed"
+-- TODO: allow option for "/ipfs" or not
 parseMerkleLink :: Parser MerkleLink
-parseMerkleLink = do
-  protocol <- parseProtocolNamespace
-  hash <- parseMultihash
-  pure (MerkleLink protocol hash)
+parseMerkleLink = MerkleLink <$> parseMultiaddr
 
-parseProtocolNamespace :: Parser Text
-parseProtocolNamespace = _
+-- TODO: for now we don't parse multihashes in full generality -- we only allow
+-- one protocol / location pair. In fact, we only allow /ipfs/. And we don't
+-- try to hard on verifying the identifier is okay.
+parseMultiaddr :: Parser Multiaddr
+parseMultiaddr = do
+  proto <- string "/ipfs"
+  _ <- char '/'
+  ident <- takeWhile (not . (== '/'))
+  case readMultiaddr (proto <> "/" <> ident) of
+    Just x -> pure x
+    Nothing -> empty
 
-parseMultihash :: Parser Text
-parseMultihash = _
+-- $class
+
+class IsIpld a where
+  toIpld :: a -> Value
+
+  -- TODO: more expressive failure info
+  fromIpld :: Value -> Maybe a
+
+instance IsIpld Value where
+  toIpld = id
+  fromIpld = Just
