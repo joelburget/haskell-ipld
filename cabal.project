@@ -1,0 +1,3 @@
+packages:
+  ./ipld.cabal
+  ./binary-serialise-cbor/binary-serialise-cbor.cabal
