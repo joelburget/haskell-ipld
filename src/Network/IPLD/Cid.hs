@@ -4,6 +4,7 @@
 module Network.IPLD.Cid where
 
 import Crypto.Hash
+import Data.Bits
 import Data.Monoid ((<>))
 import Data.Byteable (toBytes)
 import Data.ByteString (ByteString)
@@ -15,6 +16,8 @@ import Data.Text.Format
 import Data.Text.Encoding (decodeUtf8)
 import Data.Word (Word8)
 import Data.ByteString.Base58
+
+import Debug.Trace
 
 data Multibase
   = Identity_Multibase
@@ -146,7 +149,7 @@ instance HumanOrCompact HashFunction where
     Sha3_384              -> "sha3-384"
     Sha3_512              -> "sha3-512"
 
-  compact = BS.pack . pure . fromInteger . toInteger . fromEnum
+  compact = BS.pack . pure . iToW8 . fromEnum
 
 data Multihash = Multihash
   HashFunction   -- hash function
@@ -154,10 +157,14 @@ data Multihash = Multihash
   ByteString     -- hash function output
   deriving (Eq, Show)
 
+iToW8 :: Int -> Word8
+iToW8 = fromInteger . toInteger
+
 instance HumanOrCompact Multihash where
   compact (Multihash fun size bs) =
-    let bs' = encodeBase58 bitcoinAlphabet bs
-    in compact fun <> B8.pack (show size) <> bs'
+    let bs' = traceShowId $ encodeBase58 bitcoinAlphabet bs
+        prefix = shift (iToW8 $ fromEnum Sha2_256) 2 .|. size
+    in traceShowId (BS.pack [prefix]) <> bs'
 
   human (Multihash fun size bs) =
     let bs' = decodeUtf8 $ encodeBase58 bitcoinAlphabet bs
@@ -202,6 +209,7 @@ instance HumanOrCompact Cid where
 
   compact (Cid base version codec multihash)
     = compact base
-   <> B8.pack (show version)
+   -- <> (compact Base16 <> B8.pack (show version))
+   <> "d"
    <> compact codec
-   <> compact multihash
+   <> (traceShowId (compact multihash))

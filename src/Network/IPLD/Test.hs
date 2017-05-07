@@ -7,6 +7,7 @@ import Network.IPLD
 import Data.Binary.Serialise.CBOR
 import Data.ByteString.Lazy (toStrict)
 import Data.ByteString (ByteString)
+import Data.Text (Text)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -17,12 +18,16 @@ runTests = defaultMain tests
 putNull :: IsIpld a => a -> Cid
 putNull = mkCid . toStrict . serialise . toIpld
 
-putNullB :: IsIpld a => a -> ByteString
-putNullB = compact . putNull
+putNullC :: IsIpld a => a -> ByteString
+putNullC = compact . putNull
+
+putNullH :: IsIpld a => a -> Text
+putNullH = human . putNull
 
 tests :: TestTree
 tests = testGroup "ipld"
   [ testGroup "serialization"
-    [ testCase "1" $ putNullB fooBazExample @=? "zdpuAsgFQS2xim3mRqRTjtZGEHoqMdeoFAehG68CfLuVSjySF"
+    [ testCase "1" $ putNullC fooBazExample @?= "zdpuAsgFQS2xim3mRqRTjtZGEHoqMdeoFAehG68CfLuVSjySF"
+    , testCase "2" $ putNullH fooBazExample @?= "base58btc-cidv1-dag-cbor-sha2-256-32-??"
     ]
   ]

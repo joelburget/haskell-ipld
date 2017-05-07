@@ -7,8 +7,9 @@ import Network.IPLD.Internal
 import Network.Multiaddr
 
 linkExample :: MerkleLink
-linkExample = fromJust $ MerkleLink <$> decode
-  "QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k"
+linkExample = fromJust $ MerkleLink <$> readMultiaddr
+  "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k"
+  -- "QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k"
 
 fooBazExample :: Value
 fooBazExample = object
