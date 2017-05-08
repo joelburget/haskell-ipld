@@ -3,13 +3,12 @@
 {-# language TypeApplications #-}
 module Network.IPLD.Cid where
 
+import Control.Arrow ((>>>), (<<<))
 import Crypto.Hash
-import Data.Bits
 import Data.Monoid ((<>))
-import Data.Byteable (toBytes)
+import qualified Data.ByteArray as BA
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as B8
 import Data.Text (Text)
 import Data.Text.Lazy (toStrict)
 import Data.Text.Format
@@ -17,7 +16,9 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Word (Word8)
 import Data.ByteString.Base58
 
-import Debug.Trace
+import           Data.Binary.Serialise.CBOR.Class
+import           Data.Binary.Serialise.CBOR.Encoding
+import           Data.Binary.Serialise.CBOR.Decoding
 
 data Multibase
   = Identity_Multibase
@@ -42,6 +43,14 @@ data Multibase
 class HumanOrCompact a where
   human :: a -> Text
   compact :: a -> ByteString
+
+instance Enum Multibase where
+  toEnum = toEnum >>> \case
+    '0' -> Identity_Multibase
+    'z' -> Base58Btc
+  fromEnum = fromEnum <<< \case
+    Identity_Multibase -> '0'
+    Base58Btc          -> 'z'
 
 instance HumanOrCompact Multibase where
   human = \case
@@ -92,14 +101,14 @@ data CodecId
 
 instance Enum CodecId where
   toEnum = \case
-    0x70 -> DagCbor
+    0x71 -> DagCbor
 
   fromEnum = \case
-    DagCbor -> 0x70
+    DagCbor -> 0x71
 
 instance HumanOrCompact CodecId where
   human DagCbor = "dag-cbor"
-  compact DagCbor = BS.pack [0x70]
+  compact DagCbor = BS.pack [0x71]
 
 data Multicodec = Multicodec
   CodecId
@@ -160,11 +169,11 @@ data Multihash = Multihash
 iToW8 :: Int -> Word8
 iToW8 = fromInteger . toInteger
 
+w8ToI :: Word8 -> Int
+w8ToI = fromInteger . toInteger
+
 instance HumanOrCompact Multihash where
-  compact (Multihash fun size bs) =
-    let bs' = traceShowId $ encodeBase58 bitcoinAlphabet bs
-        prefix = shift (iToW8 $ fromEnum Sha2_256) 2 .|. size
-    in traceShowId (BS.pack [prefix]) <> bs'
+  compact (Multihash fun size bs) = compact fun <> BS.pack [size] <> bs
 
   human (Multihash fun size bs) =
     let bs' = decodeUtf8 $ encodeBase58 bitcoinAlphabet bs
@@ -175,6 +184,10 @@ instance HumanOrCompact Multihash where
          , bs'
          )
 
+instance Serialise Multihash where
+  encode = encode . compact
+  decode = undefined
+
 data Cid = Cid
   Multibase
   UnsignedVarint
@@ -183,14 +196,17 @@ data Cid = Cid
   Multihash
   deriving (Eq, Show)
 
+toByteString :: BA.ByteArrayAccess a => a -> ByteString
+toByteString = BS.pack . BA.unpack
+
 -- Qm: sha2-256, 32 bytes, base-58 encoding
 hashOf :: ByteString -> Multihash
-hashOf = Multihash Sha2_256 32 . toBytes . hash @SHA256
+hashOf bs =
+  let digest = hash @ByteString @SHA256 bs
+  in Multihash Sha2_256 32 $ toByteString digest
 
 mkCid :: ByteString -> Cid
 mkCid = Cid Base58Btc 1 DagCbor . hashOf
-
--- instance Serialize Cid where
 
 instance HumanOrCompact Cid where
   human (Cid base version codec multihash) =
@@ -207,9 +223,11 @@ instance HumanOrCompact Cid where
          , human multihash
          )
 
-  compact (Cid base version codec multihash)
-    = compact base
-   -- <> (compact Base16 <> B8.pack (show version))
-   <> "d"
-   <> compact codec
-   <> (traceShowId (compact multihash))
+  compact (Cid base version codec multihash) =
+    let base' = compact base
+        rest = BS.pack [version] <> compact codec <> compact multihash
+    in base' <> encodeBase58 bitcoinAlphabet rest
+
+instance Serialise Cid where
+  encode = encode . compact
+  decode = undefined "TODO: decode Cid"

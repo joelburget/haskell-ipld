@@ -4,12 +4,15 @@ module Network.IPLD.Example where
 import Data.Maybe (fromJust)
 
 import Network.IPLD.Internal
-import Network.Multiaddr
+-- import Network.Multiaddr
 
 linkExample :: MerkleLink
-linkExample = fromJust $ MerkleLink <$> readMultiaddr
+linkExample = fromJust $ merkleLink
   "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k"
   -- "QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k"
+
+helloWorldExample :: Value
+helloWorldExample = TextValue "hello, world"
 
 fooBazExample :: Value
 fooBazExample = object
