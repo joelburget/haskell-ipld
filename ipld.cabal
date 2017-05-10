@@ -34,7 +34,7 @@ library
     byteable,
     cryptonite,
     text-format,
-    -- base16-bytestring,
+    base16-bytestring,
     base58-bytestring,
     memory,
     lens,

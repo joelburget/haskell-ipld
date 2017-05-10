@@ -65,7 +65,8 @@ tests = testGroup "ipld"
             ]
       in actual @?= expected
     -- , testCase "link" $
-    --   let expected = "dpuAu19hy6vVmfjcR3zW5dHRmte9RZXgMmWnr8wcmnbFmR2E"
+    --   let expected = "zdpuAu19hy6vVmfjcR3zW5dHRmte9RZXgMmWnr8wcmnbFmR2E"
+    --       helloWorldAddr = "zdpuAxhpv1we4dKYKEeXnDF9KoenuFuXoKxuA3t3YbDRay7h4"
     --       actual = putNullC $ LinkValue $ MerkleLink helloWorldAddr
     --   in actual @?= expected
     ]

@@ -9,6 +9,7 @@ import Prelude hiding (takeWhile)
 
 import Control.Applicative
 import Control.Lens ((^?), ix)
+import Control.Monad (when)
 import Data.HashMap.Strict (HashMap)
 import Data.Monoid ((<>))
 import Data.String
@@ -17,11 +18,13 @@ import Data.Vector (Vector)
 import GHC.Generics
 import Text.Read
 import Data.ByteString.Base58
-import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as Hex
+import qualified Data.ByteString.Char8 as B8
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Text as T
 import qualified Data.Vector as V
+import Data.Word (Word8)
 
 import           Data.Attoparsec.Text
 import qualified Data.Attoparsec.ByteString as ABS
@@ -178,18 +181,34 @@ base58Class = B8.unpack $ unAlphabet bitcoinAlphabet
 parseCid :: ABS.Parser Cid
 parseCid = do
   base <- ABS.anyWord8
-  case toEnum $ w8ToI base of
+  case toEnum' base of
     Base58Btc -> do
       b58str <- BS.pack <$> ABS.count 48 (ABS.satisfy (ABS.inClass base58Class))
       case decodeBase58 bitcoinAlphabet b58str of
         Nothing -> fail "invalid base-58 string"
         Just byteStr -> do
-          let version:codec:hashVal = BS.unpack byteStr
-          -- traceShowM $ encodeBase58 bitcoinAlphabet $ BS.pack hashVal
+          -- TODO use Cons lens?
+          let (header, hashVal) = BS.splitAt 2 byteStr
+              [version, codec] = BS.unpack header
           case (version, codec) of
-            (1, 0x71) -> pure $ mkCid byteStr
-            _ -> fail $ "Can't currently parse other than cid v1, dag-cbor"
+            (1, 0x71) -> do
+              case ABS.parseOnly parseMultihash hashVal of
+                Left err -> fail err
+                Right mh -> pure $ Cid Base58Btc 1 DagCbor mh
+            _ -> fail "Can't currently parse other than cid v1, dag-cbor"
     _ -> fail "Can't currently parse other than base58btc"
+
+toEnum' :: Enum a => Word8 -> a
+toEnum' = toEnum . w8ToI
+
+parseMultihash :: ABS.Parser Multihash
+parseMultihash = do
+  fun  <- ABS.anyWord8
+  size <- ABS.anyWord8
+  rest <- ABS.takeByteString -- ABS.count 32 ABS.anyWord8
+  let len = BS.length rest
+  when (len /= 32) (fail $ "invalid multihash length (" ++ show len ++ ") (" ++ show (Hex.encode rest) ++ ")")
+  pure (Multihash (toEnum' fun) (toEnum' size) rest)
 
 -- $class
 

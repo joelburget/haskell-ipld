@@ -9,6 +9,7 @@ import Data.Monoid ((<>))
 import qualified Data.ByteArray as BA
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as Hex
 import Data.Text (Text)
 import Data.Text.Lazy (toStrict)
 import Data.Text.Format
@@ -164,8 +165,18 @@ data Multihash = Multihash
   HashFunction   -- hash function
   UnsignedVarint -- digest size (in bytes)
   ByteString     -- hash function output
-  deriving (Eq, Show)
+  deriving Eq
 
+instance Show Multihash where
+  showsPrec d (Multihash fun size bs) = showParen (d > 10) $
+      shows "Multihash "
+    . showsPrec 11 fun
+    . shows " "
+    . showsPrec 11 size
+    . shows " 0x"
+    . showsPrec 11 (Hex.encode bs)
+
+-- both of these can be done with lens? Numeric.Lens.integral
 iToW8 :: Int -> Word8
 iToW8 = fromInteger . toInteger
 
@@ -196,6 +207,7 @@ data Cid = Cid
   Multihash
   deriving (Eq, Show)
 
+-- TODO: use http://hackage.haskell.org/package/concise-0.1.0.0/docs/Control-Lens-Cons-Extras.html ?
 toByteString :: BA.ByteArrayAccess a => a -> ByteString
 toByteString = BS.pack . BA.unpack
 
