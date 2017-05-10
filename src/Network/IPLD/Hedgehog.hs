@@ -11,6 +11,7 @@ import qualified Data.Vector as V
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
+import           Data.Binary.Serialise.CBOR
 
 import Network.IPLD.Cid
 import Network.IPLD.Internal
@@ -38,8 +39,8 @@ prop_traverse_empty = property $ do
   val <- forAll genValue
   traverseValue [] val === Found val
 
-prop_parse_unparse :: Property
-prop_parse_unparse = property $ do
+prop_parse_unparse_cid :: Property
+prop_parse_unparse_cid = property $ do
   -- rawHash <- Gen.bytes (Range.constant 32)
   -- let multihash = Multihash Sha2_256 32 rawHash
   --     cid = Cid Base58Btc 1 DagCbor multihash
@@ -47,6 +48,23 @@ prop_parse_unparse = property $ do
   let cidStr = compact cid
       parsed = ABS.parseOnly (parseCid <* ABS.endOfInput) cidStr
   parsed === Right cid
+
+-- prop_matches_ipfs :: Property
+-- prop_matches_ipfs = property $ do
+--   -- TODO: check for ipfs version
+--   hasIpfs <- shell "which ipfs" ""
+--   when (hasIpfs /= ExitSuccess) (throwError "can't find ipfs executable")
+
+--   value <- forAll genValue
+--   ipfsHash <- shell "ipfs dag put -" XXX
+--   let ourHash = mkCid value
+--   ourHash === ipfsHash
+
+prop_serialize_round_trip :: Property
+prop_serialize_round_trip = property $ do
+  value <- forAll genValue
+  let value' = deserialise $ serialise value
+  value' === value
 
 tests :: IO Bool
 tests = checkParallel $$(discover)
