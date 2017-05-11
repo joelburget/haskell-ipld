@@ -3,7 +3,6 @@
 {-# language TypeApplications #-}
 module Network.IPLD.Cid where
 
-import Control.Arrow ((>>>), (<<<))
 import Crypto.Hash
 import Data.Monoid ((<>))
 import qualified Data.ByteArray as BA
@@ -18,8 +17,8 @@ import Data.Word (Word8)
 import Data.ByteString.Base58
 
 import           Data.Binary.Serialise.CBOR.Class
-import           Data.Binary.Serialise.CBOR.Encoding
-import           Data.Binary.Serialise.CBOR.Decoding
+
+import Debug.Trace
 
 data Multibase
   = Identity_Multibase
@@ -46,12 +45,53 @@ class HumanOrCompact a where
   compact :: a -> ByteString
 
 instance Enum Multibase where
-  toEnum = toEnum >>> \case
-    '0' -> Identity_Multibase
-    'z' -> Base58Btc
-  fromEnum = fromEnum <<< \case
-    Identity_Multibase -> '0'
-    Base58Btc          -> 'z'
+  toEnum = \case
+    0x00 -> Identity_Multibase
+    other -> case toEnum other of
+      '1' -> Base1
+      '0' -> Base2
+      '7' -> Base8
+      '9' -> Base10
+      'f' -> Base16
+      'b' -> Base32
+      'c' -> Base32Pad
+      'v' -> Base32Hex
+      't' -> Base32HexPad
+      'h' -> Base32z
+      'Z' -> Base58Flickr
+      'z' -> Base58Btc
+      'm' -> Base64
+      'u' -> Base64Url
+      'M' -> Base64Pad
+      'U' -> Base64UrlPad
+      _ -> error "Enum Multibase"
+
+      -- 'F' -> Base16Upper
+      -- 'B' -> Base32Upper
+      -- 'C' -> Base32padUpper
+      -- 'V' -> Base32hexUpper
+      -- 'T' -> Base32hexPadUpper
+
+  fromEnum = \case
+    Identity_Multibase -> 0x00
+    other -> fromEnum $ case other of
+      Base1              -> '1'
+      Base2              -> '0'
+      Base8              -> '7'
+      Base10             -> '9'
+      Base16             -> 'f'
+      Base32             -> 'b'
+      Base32Pad          -> 'c'
+      Base32Hex          -> 'v'
+      Base32HexPad       -> 't'
+      Base32z            -> 'h'
+      Base58Flickr       -> 'Z'
+      Base58Btc          -> 'z'
+      Base64             -> 'm'
+      Base64Url          -> 'u'
+      Base64Pad          -> 'M'
+      Base64UrlPad       -> 'U'
+      Identity_Multibase -> undefined
 
 instance HumanOrCompact Multibase where
   human = \case
@@ -74,7 +114,7 @@ instance HumanOrCompact Multibase where
     Base64UrlPad       -> "base64urlpad"
 
   compact = \case
-    Identity_Multibase -> error "TODO"
+    Identity_Multibase -> BS.pack [0]
     Base1              -> "1"
     Base2              -> "0"
     Base8              -> "7"
@@ -103,6 +143,7 @@ data CodecId
 instance Enum CodecId where
   toEnum = \case
     0x71 -> DagCbor
+    _ -> error "toEnum CodecId"
 
   fromEnum = \case
     DagCbor -> 0x71
@@ -169,11 +210,11 @@ data Multihash = Multihash
 
 instance Show Multihash where
   showsPrec d (Multihash fun size bs) = showParen (d > 10) $
-      shows "Multihash "
+      shows @String "Multihash "
     . showsPrec 11 fun
-    . shows " "
+    . shows @String " "
     . showsPrec 11 size
-    . shows " 0x"
+    . shows @String " 0x"
     . showsPrec 11 (Hex.encode bs)
 
 -- both of these can be done with lens? Numeric.Lens.integral

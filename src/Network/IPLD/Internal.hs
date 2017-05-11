@@ -18,6 +18,7 @@ import Data.Vector (Vector)
 import GHC.Generics
 import Text.Read
 import Data.ByteString.Base58
+import Data.Text.Encoding (encodeUtf8)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Char8 as B8
@@ -102,16 +103,16 @@ data TraversalResult a
 
 traverseValue :: [Text] -> Value -> TraversalResult Value
 traverseValue [] v = Found v
-traverseValue path@(a:as) val@(DagArray vals) =
+traverseValue path@(a:as) arr@(DagArray vals) =
   let mayVal = do
         i <- readMaybe (T.unpack a)
         vals ^? ix i
   in case mayVal of
        Just val -> traverseValue as val
-       Nothing -> KeyNotFound val path
-traverseValue path@(a:as) val@(DagObject vals) = case vals ^? ix a of
+       Nothing -> KeyNotFound arr path
+traverseValue path@(a:as) obj@(DagObject vals) = case vals ^? ix a of
    Just val -> traverseValue as val
-   Nothing -> KeyNotFound val path
+   Nothing -> KeyNotFound obj path
 traverseValue path val@(TextValue _) = KeyNotFound val path
 traverseValue path (LinkValue link) = Yield link path
 
@@ -167,13 +168,12 @@ parseMerkleLink = MerkleLink <$> parseIpfsMultiaddr
 -- try to hard on verifying the identifier is okay.
 parseIpfsMultiaddr :: Parser Cid
 parseIpfsMultiaddr = do
-  proto <- string "/ipfs"
+  _proto <- string "/ipfs"
   _ <- char '/'
-  ident <- takeWhile (not . (== '/'))
-  undefined "TODO: parseMultiaddr"
-  -- case readMultiaddr (proto <> "/" <> ident) of
-  --   Just x -> pure x
-  --   Nothing -> empty
+  rest <- takeText
+  case ABS.parseOnly parseCid (encodeUtf8 rest) of
+    Left err -> fail err
+    Right x -> pure x
 
 base58Class :: String
 base58Class = B8.unpack $ unAlphabet bitcoinAlphabet
@@ -181,34 +181,38 @@ base58Class = B8.unpack $ unAlphabet bitcoinAlphabet
 parseCid :: ABS.Parser Cid
 parseCid = do
   base <- ABS.anyWord8
-  case toEnum' base of
+  case toEnum8 base of
     Base58Btc -> do
       b58str <- BS.pack <$> ABS.count 48 (ABS.satisfy (ABS.inClass base58Class))
       case decodeBase58 bitcoinAlphabet b58str of
         Nothing -> fail "invalid base-58 string"
         Just byteStr -> do
-          -- TODO use Cons lens?
           let (header, hashVal) = BS.splitAt 2 byteStr
-              [version, codec] = BS.unpack header
-          case (version, codec) of
-            (1, 0x71) -> do
+          [version, codec] <- pure (BS.unpack header)
+          case (version, toEnum8 codec) of
+            (1, DagCbor) -> do
               case ABS.parseOnly parseMultihash hashVal of
                 Left err -> fail err
                 Right mh -> pure $ Cid Base58Btc 1 DagCbor mh
             _ -> fail "Can't currently parse other than cid v1, dag-cbor"
     _ -> fail "Can't currently parse other than base58btc"
 
-toEnum' :: Enum a => Word8 -> a
-toEnum' = toEnum . w8ToI
+toEnum8 :: Enum a => Word8 -> a
+toEnum8 = toEnum . w8ToI
 
 parseMultihash :: ABS.Parser Multihash
 parseMultihash = do
   fun  <- ABS.anyWord8
   size <- ABS.anyWord8
-  rest <- ABS.takeByteString -- ABS.count 32 ABS.anyWord8
+  rest <- ABS.takeByteString
   let len = BS.length rest
-  when (len /= 32) (fail $ "invalid multihash length (" ++ show len ++ ") (" ++ show (Hex.encode rest) ++ ")")
-  pure (Multihash (toEnum' fun) (toEnum' size) rest)
+  when (len /= 32) $ fail $
+       "invalid multihash length ("
+    ++ show len
+    ++ ") ("
+    ++ show (Hex.encode rest)
+    ++ ")"
+  pure (Multihash (toEnum8 fun) (toEnum8 size) rest)
 
 -- $class
 
