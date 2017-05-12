@@ -5,6 +5,7 @@
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language DeriveDataTypeable #-}
 {-# language TypeFamilies #-}
+{-# options_ghc -funbox-strict-fields #-}
 
 module Network.IPLD.Internal where
 
@@ -87,10 +88,10 @@ data Row
   deriving (Eq, Show, Generic)
 
 data Value
-  = LinkValue MerkleLink
-  | DagObject (HashMap Text Value)
-  | DagArray (Vector Value)
-  | TextValue Text -- TODO should this be a bytestring?
+  = LinkValue !MerkleLink
+  | DagObject !(HashMap Text Value)
+  | DagArray !(Vector Value)
+  | TextValue !Text -- TODO should this be a bytestring?
   -- Should there also be number, bool, null?
   deriving (Eq, Show, Generic, Typeable, Data)
 
