@@ -15,6 +15,7 @@ import qualified Hedgehog.Range as Range
 import           Data.Binary.Serialise.CBOR
 import           Turtle
 import           Control.Monad.Except
+import           Data.Scientific
 
 import Network.IPLD.Cid
 import Network.IPLD.Internal
@@ -22,12 +23,20 @@ import Network.IPLD.Internal
 genTextValue :: Monad m => Gen m Text
 genTextValue = Gen.text (Range.linear 0 100) Gen.unicode
 
+genScientific :: Monad m => Gen m Scientific
+genScientific = scientific
+  <$> (toInteger <$> Gen.int64 Range.linearBounded)
+  <*> Gen.int Range.linearBounded
+
 genValue :: Monad m => Gen m Value
 genValue
     = TextValue              <$> genTextValue
   <|> LinkValue . MerkleLink <$> genCid
   <|> DagArray  . V.fromList <$> Gen.list (Range.linear 0 10) genValue
   <|> DagObject              <$> genDagObject (Range.linear 0 10)
+  <|> DagNumber              <$> genScientific
+  <|> DagBool                <$> Gen.bool
+  <|> pure Null
 
 genDagObject :: Monad m => Range Int -> Gen m (HashMap Text Value)
 genDagObject range =

@@ -42,6 +42,7 @@ library
     lens,
     mtl,
     hashable,
+    scientific,
 
     -- Test
     tasty,

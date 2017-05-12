@@ -24,6 +24,7 @@ import           Data.Functor.Identity
 import           Data.HashMap.Strict (HashMap)
 import           Data.Hashable
 import           Data.Monoid ((<>))
+import           Data.Scientific
 import           Data.String
 import           Data.Text (Text)
 import           Data.Text.Encoding (encodeUtf8)
@@ -54,6 +55,18 @@ import Network.IPLD.Cid
 cborTagLink :: Word
 cborTagLink = 42
 
+-- TODO: This is so similar to Data.Aeson.Value, just with the addition of
+-- links -- is there any way to not duplicate all their work?
+data Value
+  = LinkValue !MerkleLink
+  | DagObject !(HashMap Text Value)
+  | DagArray !(Vector Value)
+  | TextValue !Text
+  | DagNumber !Scientific
+  | DagBool !Bool
+  | Null
+  deriving (Eq, Show, Generic, Typeable, Data)
+
 newtype MerkleLink = MerkleLink Cid -- MultihashDigest
   deriving (Eq, Show, Generic, Hashable, Typeable, Data)
 
@@ -61,12 +74,28 @@ instance Serialise MerkleLink where
   encode (MerkleLink loc) = encodeTag cborTagLink <> encode loc
   decode = decodeTag *> decode
 
+decodeIndefList :: Decoder s Value
+decodeIndefList = DagArray . V.fromList <$> decode
+
+decodeNumberIntegral :: Decoder s Value
+decodeNumberIntegral = DagNumber . fromInteger <$> decode
+
+decodeNumberFloating :: Decoder s Value
+decodeNumberFloating = DagNumber . fromFloatDigits <$>
+  (decode :: Decoder s Double)
+
 instance Serialise Value where
   encode = \case
     LinkValue lnk  -> encode lnk
-    TextValue text -> encode text
     DagObject hmap -> encode hmap
     DagArray  arr  -> encode arr
+    TextValue text -> encode text
+    -- This instance is taken from a cbor example
+    DagNumber num  -> case floatingOrInteger num of
+      Left  d -> encode (d :: Double)
+      Right i -> encode (i :: Integer)
+    DagBool   bool -> encode bool
+    Null           -> encodeNull
 
   decode = do
     tkty <- peekTokenType
@@ -74,26 +103,28 @@ instance Serialise Value where
       TypeTag -> do
         _tag <- decodeTag
         LinkValue <$> decode
-      TypeString -> TextValue <$> decode
-      TypeListLen -> DagArray <$> decode
-      TypeMapLen -> DagObject <$> decode
-      _ -> fail $ "unexpected CBOR token type for IPLD value: " ++ show tkty
+      TypeString  -> TextValue <$> decode
+      TypeListLen -> DagArray  <$> decode
+      TypeListLenIndef -> decodeIndefList
+      TypeMapLen  -> DagObject <$> decode
+      TypeBool    -> DagBool   <$> decodeBool
+      TypeNull    -> Null      <$  decodeNull
 
-data Hierarchy = Ipfs
+
+      TypeUInt    -> decodeNumberIntegral
+      TypeUInt64  -> decodeNumberIntegral
+      TypeNInt    -> decodeNumberIntegral
+      TypeNInt64  -> decodeNumberIntegral
+      TypeInteger -> decodeNumberIntegral
+      TypeFloat64 -> decodeNumberFloating
+
+      _ -> fail $ "unexpected CBOR token type for IPLD value: " ++ show tkty
 
 data Row
   -- TODO: should LinkRow exist?
   = LinkRow MerkleLink
   | ValueRow Text Value
   deriving (Eq, Show, Generic)
-
-data Value
-  = LinkValue !MerkleLink
-  | DagObject !(HashMap Text Value)
-  | DagArray !(Vector Value)
-  | TextValue !Text -- TODO should this be a bytestring?
-  -- Should there also be number, bool, null?
-  deriving (Eq, Show, Generic, Typeable, Data)
 
 type instance Index Value = Text
 
@@ -111,8 +142,8 @@ linkToM = MerkleLink . mkCid . toStrict . serialise
 linkToV :: Value -> Value
 linkToV = LinkValue . linkToM
 
-type MerkleUniverse = HashMap MerkleLink Value
-type GraftM = WriterT Text (State MerkleUniverse)
+-- type MerkleUniverse = HashMap MerkleLink Value
+-- type GraftM = WriterT Text (State MerkleUniverse)
 
 -- Options:
 --   - what to do when we don't have the link value?
@@ -171,8 +202,8 @@ traverseValue path@(RelMerklePath (a:as)) obj@(DagObject vals)
   = case vals ^? ix a of
       Just val -> traverseValue (RelMerklePath as) val
       Nothing -> KeyNotFound obj path
-traverseValue path val@(TextValue _) = KeyNotFound val path
 traverseValue path (LinkValue lnk) = Yield lnk path
+traverseValue path val = KeyNotFound val path
 
 
 (.=) :: Text -> Value -> Row
