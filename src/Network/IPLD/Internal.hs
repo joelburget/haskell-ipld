@@ -16,6 +16,7 @@ import           Control.Lens
 import           Control.Monad (when)
 import           Control.Monad.State
 import           Control.Monad.Writer
+import qualified Data.Aeson as Aeson
 import           Data.ByteString.Base58
 import           Data.ByteString.Lazy (toStrict)
 import           Data.Data
@@ -26,7 +27,7 @@ import           Data.Monoid ((<>))
 import           Data.Scientific
 import           Data.String
 import           Data.Text (Text)
-import           Data.Text.Encoding (encodeUtf8)
+import           Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import           Data.Vector (Vector)
 import           Data.Word (Word8)
 import           GHC.Generics
@@ -59,12 +60,23 @@ cborTagLink = 42
 data Value
   = LinkValue !MerkleLink
   | DagObject !(HashMap Text Value)
-  | DagArray !(Vector Value)
+  | DagArray  !(Vector Value)
   | TextValue !Text
   | DagNumber !Scientific
-  | DagBool !Bool
+  | DagBool   !Bool
   | Null
   deriving (Eq, Show, Generic, Typeable, Data)
+
+toAeson :: Value -> Aeson.Value
+toAeson = \case
+  LinkValue (MerkleLink cid) -> Aeson.object
+    [ "/" Aeson..= decodeUtf8 (compact cid) ]
+  DagObject hmap -> Aeson.Object (toAeson <$> hmap)
+  DagArray  arr  -> Aeson.Array  (toAeson <$> arr)
+  TextValue text -> Aeson.String text
+  DagNumber num  -> Aeson.Number num
+  DagBool   bool -> Aeson.Bool   bool
+  Null           -> Aeson.Null
 
 newtype MerkleLink = MerkleLink Cid -- MultihashDigest
   deriving (Eq, Show, Generic, Hashable, Typeable, Data)
