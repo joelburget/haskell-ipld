@@ -2,6 +2,7 @@
 
 [![standard-readme compliant](https://img.shields.io/badge/standard--readme-OK-green.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 [![Build Status](https://secure.travis-ci.org/joelburget/haskell-ipld.svg)](http://travis-ci.org/joelburget/haskell-ipld)
+[![Windows Build Status](https://img.shields.io/appveyor/ci/joelburget/haskell-ipld/master.svg?label=Windows%20build)](https://ci.appveyor.com/project/joelburget/haskell-ipld/branch/master)
 
 > An implementation of IPLD (InterPlanetary Linked Data) in Haskell
 
