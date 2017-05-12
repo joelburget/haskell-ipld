@@ -2,35 +2,45 @@
 {-# language DeriveGeneric #-}
 {-# language LambdaCase #-}
 {-# language OverloadedStrings #-}
+{-# language GeneralizedNewtypeDeriving #-}
+{-# language DeriveDataTypeable #-}
+{-# language TypeFamilies #-}
 
 module Network.IPLD.Internal where
 
 import Prelude hiding (takeWhile)
 
-import Control.Applicative
-import Control.Lens ((^?), ix)
-import Control.Monad (when)
-import Data.HashMap.Strict (HashMap)
-import Data.Monoid ((<>))
-import Data.String
-import Data.Text (Text)
-import Data.Vector (Vector)
-import GHC.Generics
-import Text.Read
-import Data.ByteString.Base58
-import Data.Text.Encoding (encodeUtf8)
+import           Control.Applicative
+import           Control.Lens
+  ((^?), Index, IxValue, Ixed(..), transformM, Plated, rewriteM)
+import           Control.Monad (when)
+import           Control.Monad.State
+import           Control.Monad.Writer
+import           Data.ByteString.Base58
+import           Data.ByteString.Lazy (toStrict)
+import           Data.Data
+import           Data.Functor.Identity
+import           Data.HashMap.Strict (HashMap)
+import           Data.Hashable
+import           Data.Monoid ((<>))
+import           Data.String
+import           Data.Text (Text)
+import           Data.Text.Encoding (encodeUtf8)
+import           Data.Vector (Vector)
+import           Data.Word (Word8)
+import           GHC.Generics
+import           Text.Read
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Text as T
 import qualified Data.Vector as V
-import Data.Word (Word8)
 
 import           Data.Attoparsec.Text
 import qualified Data.Attoparsec.ByteString as ABS
 
-import           Data.Binary.Serialise.CBOR.Class
+import           Data.Binary.Serialise.CBOR
 import           Data.Binary.Serialise.CBOR.Encoding
 import           Data.Binary.Serialise.CBOR.Decoding
 
@@ -44,7 +54,7 @@ cborTagLink :: Word
 cborTagLink = 42
 
 newtype MerkleLink = MerkleLink Cid -- MultihashDigest
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Generic, Hashable, Typeable, Data)
 
 instance Serialise MerkleLink where
   encode (MerkleLink loc) = encodeTag cborTagLink <> encode loc
@@ -52,7 +62,7 @@ instance Serialise MerkleLink where
 
 instance Serialise Value where
   encode = \case
-    LinkValue link -> encode link
+    LinkValue lnk  -> encode lnk
     TextValue text -> encode text
     DagObject hmap -> encode hmap
     DagArray  arr  -> encode arr
@@ -71,17 +81,60 @@ instance Serialise Value where
 data Hierarchy = Ipfs
 
 data Row
+  -- TODO: should LinkRow exist?
   = LinkRow MerkleLink
   | ValueRow Text Value
   deriving (Eq, Show, Generic)
 
 data Value
   = LinkValue MerkleLink
-  | TextValue Text -- TODO should this be a bytestring?
   | DagObject (HashMap Text Value)
   | DagArray (Vector Value)
+  | TextValue Text -- TODO should this be a bytestring?
   -- Should there also be number, bool, null?
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Generic, Typeable, Data)
+
+type instance Index Value = Text
+
+type instance IxValue Value = Value
+instance Ixed Value where
+  ix i f (DagObject o) = DagObject <$> ix i f o
+  ix _ _ v             = pure v
+  {-# INLINE ix #-}
+
+instance Plated Value
+
+linkToM :: Value -> MerkleLink
+linkToM = MerkleLink . mkCid . toStrict . serialise
+
+linkToV :: Value -> Value
+linkToV = LinkValue . linkToM
+
+type MerkleUniverse = HashMap MerkleLink Value
+type GraftM = WriterT Text (State MerkleUniverse)
+
+-- Options:
+--   - what to do when we don't have the link value?
+--   - graft all links?
+--   - graft grafted-in values? (recursively graft (link) until no links left?
+--
+-- graftAll :: Value -> GraftM (Maybe Value)
+
+graft :: (MerkleLink -> Value) -> Value -> Value
+graft f = runIdentity . graftM (Identity . f)
+
+graftM :: Monad m => (MerkleLink -> m Value) -> Value -> m Value
+graftM f = transformM $ \case
+  LinkValue lnk -> f lnk
+  other          -> pure other
+
+link :: (MerkleLink -> Value) -> Value -> Value
+link f = runIdentity . linkM (Identity . f)
+
+linkM :: Monad m => (MerkleLink -> m Value) -> Value -> m Value
+linkM f = rewriteM $ \case
+  LinkValue lnk -> Just <$> f lnk
+  _              -> pure Nothing
 
 instance IsString Value where
   fromString = TextValue . fromString
@@ -114,7 +167,7 @@ traverseValue path@(a:as) obj@(DagObject vals) = case vals ^? ix a of
    Just val -> traverseValue as val
    Nothing -> KeyNotFound obj path
 traverseValue path val@(TextValue _) = KeyNotFound val path
-traverseValue path (LinkValue link) = Yield link path
+traverseValue path (LinkValue lnk) = Yield lnk path
 
 
 (.=) :: Text -> Value -> Row
@@ -134,7 +187,7 @@ array = DagArray . V.fromList
 merkleLink :: Text -> Maybe MerkleLink
 merkleLink text = case parseOnly (parseMerkleLink <* endOfInput) text of
   Left _     -> Nothing
-  Right link -> Just link
+  Right lnk -> Just lnk
 
 merkleLink' :: Text -> Maybe Value
 merkleLink' text = LinkValue <$> merkleLink text
@@ -151,12 +204,12 @@ merklePath = parseOnly (parseMerklePath <* endOfInput)
 
 parseMerklePath :: Parser MerklePath
 parseMerklePath = do
-  link <- parseMerkleLink
+  lnk <- parseMerkleLink
   traversal <- (do
     _ <- char '/'
     takeWhile (not . (== '/')) `sepBy` (char '/')
     ) <|> pure []
-  pure (MerklePath link traversal)
+  pure (MerklePath lnk traversal)
 
 -- "currently, only the ipfs hierarchy is allowed"
 -- TODO: allow option for "/ipfs" or not

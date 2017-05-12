@@ -1,18 +1,20 @@
 {-# language OverloadedStrings #-}
+{-# language MultiWayIf #-}
 module Network.IPLD.Test where
 
--- import Network.IPLD.Example
 import Network.IPLD
+import Network.IPLD.Lens
 
+import           Control.Lens hiding ((.=))
+import           Data.Binary.Serialise.CBOR
+import           Data.ByteString (ByteString)
+import           Data.ByteString.Lazy (toStrict)
+import           Data.Text (Text)
+import           Test.Tasty
+import           Test.Tasty.HUnit
 import qualified Data.Attoparsec.ByteString as ABS
-import Data.Binary.Serialise.CBOR
-import Data.ByteString.Lazy (toStrict)
-import Data.ByteString (ByteString)
 import qualified Data.HashMap.Strict as H
-import Data.Text (Text)
 import qualified Data.Vector as V
-import Test.Tasty
-import Test.Tasty.HUnit
 
 runTests :: IO ()
 runTests = defaultMain tests
@@ -81,5 +83,77 @@ tests = testGroup "ipld"
           actual = ABS.parseOnly (parseCid <* ABS.endOfInput) cidStr
       in actual @?= expected
     ]
+
+  , testGroup "manipulation" $
+    let childA = "hi, i'm child a"
+        childB = object
+          [ "info" .= "hi, i'm child b"
+          , "link" .= linkToV childC
+          ]
+        childC = object
+          [ "info" .= "hi, i'm child c"
+          , "link" .= linkToV childD
+          ]
+        childD = "hi, i'm child d"
+        root = object
+          [ "link a" .= linkToV childA
+          , "link b" .= linkToV childB
+          ]
+
+        linker lnk = if
+          | lnk == linkToM childA -> childA
+          | lnk == linkToM childB -> childB
+          | lnk == linkToM childC -> childC
+          | lnk == linkToM childD -> childD
+          | otherwise -> error "bad link"
+    in
+
+      [ testCase "replacing a single link" $
+        let actual = root & key "link a" .~ childA
+            expected = object
+              [ "link a" .= childA
+              , "link b" .= linkToV childB
+              ]
+        in actual @?= expected
+
+      , testCase "replacing many links, non-recursively" $
+        let actual = graft linker root
+            expected = object
+              [ "link a" .= childA
+              , "link b" .= childB
+              ]
+        in actual @?= expected
+
+      , testCase "replacing many links, recursively" $
+        let actual = link linker root
+            expected = object
+              [ "link a" .= childA
+              , "link b" .= object
+                [ "info" .= "hi, i'm child b"
+                , "link" .= object
+                  [ "info" .= "hi, i'm child c"
+                  , "link" .= childD
+                  ]
+                ]
+              ]
+        in actual @?= expected
+
+      , testCase "erroring when we can't find a link" $
+        let f lnk = Left lnk
+            actual = linkM f root
+            expected = Left (linkToM childA)
+        in actual @?= expected
+
+      , testCase "ignoring when we can't find a link" $
+        let f lnk = if
+              | lnk == linkToM childA -> childA
+              | otherwise             -> LinkValue lnk
+            actual = graft f root
+            expected = object
+              [ "link a" .= childA
+              , "link b" .= linkToV childB
+              ]
+        in actual @?= expected
+      ]
 
   ]

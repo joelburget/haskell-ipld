@@ -18,6 +18,7 @@ library
     Network.IPLD.Example
     Network.IPLD.Test
     Network.IPLD.Hedgehog
+    Network.IPLD.Lens
   other-modules:
     Network.IPLD.Internal
     Network.IPLD.Cid
@@ -38,6 +39,8 @@ library
     base58-bytestring,
     memory,
     lens,
+    mtl,
+    hashable,
 
     -- Test
     tasty,

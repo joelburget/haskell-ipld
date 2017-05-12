@@ -1,24 +1,32 @@
 {-# language OverloadedStrings #-}
+{-# language DeriveGeneric #-}
 {-# language LambdaCase #-}
 {-# language TypeApplications #-}
+{-# language DeriveAnyClass #-}
+{-# language DeriveDataTypeable #-}
+
 module Network.IPLD.Cid where
 
-import Crypto.Hash
-import Data.Monoid ((<>))
+import           Crypto.Hash
+import           Data.ByteString (ByteString)
+import           Data.ByteString.Base58
+import           Data.Data
+import           Data.Hashable (Hashable)
+import           Data.Monoid ((<>))
+import           Data.Text (Text)
+import           Data.Text.Encoding (decodeUtf8)
+import           Data.Text.Format
+import           Data.Text.Lazy (toStrict)
+import           Data.Word (Word8)
+import           GHC.Generics
 import qualified Data.ByteArray as BA
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Hex
-import Data.Text (Text)
-import Data.Text.Lazy (toStrict)
-import Data.Text.Format
-import Data.Text.Encoding (decodeUtf8)
-import Data.Word (Word8)
-import Data.ByteString.Base58
 
 import           Data.Binary.Serialise.CBOR.Class
 
-import Debug.Trace
+-- pattern Identity_MultibaseI :: Int
+-- pattern Identity_MultibaseI = 0
 
 data Multibase
   = Identity_Multibase
@@ -38,7 +46,7 @@ data Multibase
   | Base64Pad
   | Base64Url
   | Base64UrlPad
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, Hashable, Typeable, Data)
 
 class HumanOrCompact a where
   human :: a -> Text
@@ -138,7 +146,7 @@ type UnsignedVarint = Word8
 
 data CodecId
   = DagCbor
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, Hashable, Typeable, Data)
 
 instance Enum CodecId where
   toEnum = \case
@@ -165,7 +173,7 @@ data HashFunction
   | Sha3_256
   | Sha3_384
   | Sha3_512
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, Hashable, Typeable, Data)
 
 instance Enum HashFunction where
   toEnum = \case
@@ -206,7 +214,7 @@ data Multihash = Multihash
   HashFunction   -- hash function
   UnsignedVarint -- digest size (in bytes)
   ByteString     -- hash function output
-  deriving Eq
+  deriving (Eq, Generic, Hashable, Typeable, Data)
 
 instance Show Multihash where
   showsPrec d (Multihash fun size bs) = showParen (d > 10) $
@@ -246,7 +254,7 @@ data Cid = Cid
   -- Multicodec
   CodecId
   Multihash
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, Hashable, Typeable, Data)
 
 -- TODO: use http://hackage.haskell.org/package/concise-0.1.0.0/docs/Control-Lens-Cons-Extras.html ?
 toByteString :: BA.ByteArrayAccess a => a -> ByteString
