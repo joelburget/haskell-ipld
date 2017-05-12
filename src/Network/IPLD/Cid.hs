@@ -1,7 +1,6 @@
 {-# language OverloadedStrings #-}
 {-# language DeriveGeneric #-}
 {-# language LambdaCase #-}
-{-# language TypeApplications #-}
 {-# language DeriveAnyClass #-}
 {-# language DeriveDataTypeable #-}
 
@@ -218,11 +217,11 @@ data Multihash = Multihash
 
 instance Show Multihash where
   showsPrec d (Multihash fun size bs) = showParen (d > 10) $
-      shows @String "Multihash "
+      showString "Multihash "
     . showsPrec 11 fun
-    . shows @String " "
+    . showString " "
     . showsPrec 11 size
-    . shows @String " 0x"
+    . showString " "
     . showsPrec 11 (Hex.encode bs)
 
 -- both of these can be done with lens? Numeric.Lens.integral
@@ -263,7 +262,7 @@ toByteString = BS.pack . BA.unpack
 -- Qm: sha2-256, 32 bytes, base-58 encoding
 hashOf :: ByteString -> Multihash
 hashOf bs =
-  let digest = hash @ByteString @SHA256 bs
+  let digest = hash bs :: Digest SHA256
   in Multihash Sha2_256 32 $ toByteString digest
 
 mkCid :: ByteString -> Cid

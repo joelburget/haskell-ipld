@@ -3,6 +3,7 @@ module Network.IPLD.Hedgehog where
 
 import           Control.Applicative
 import qualified Data.Attoparsec.ByteString as ABS
+import           Data.ByteString.Lazy (toStrict)
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Map as Map
@@ -12,6 +13,8 @@ import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import           Data.Binary.Serialise.CBOR
+import           Turtle
+import           Control.Monad.Except
 
 import Network.IPLD.Cid
 import Network.IPLD.Internal
@@ -56,8 +59,8 @@ prop_parse_unparse_cid = property $ do
 --   when (hasIpfs /= ExitSuccess) (throwError "can't find ipfs executable")
 
 --   value <- forAll genValue
---   ipfsHash <- shell "ipfs dag put -" XXX
---   let ourHash = mkCid value
+--   ipfsHash <- shell "ipfs dag put -" -- XXX
+--   let ourHash = mkCid $ toStrict $ serialise value
 --   ourHash === ipfsHash
 
 prop_serialize_round_trip :: Property
@@ -65,6 +68,10 @@ prop_serialize_round_trip = property $ do
   value <- forAll genValue
   let value' = deserialise $ serialise value
   value' === value
+
+-- prop_traverse_graft :: Property
+
+-- prop_graft_hash :: Property
 
 tests :: IO Bool
 tests = checkParallel $$(discover)

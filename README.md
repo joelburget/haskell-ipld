@@ -1,6 +1,7 @@
 # haskell-ipld
 
 [![standard-readme compliant](https://img.shields.io/badge/standard--readme-OK-green.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
+[![Build Status](https://secure.travis-ci.org/joelburget/haskell-ipld.svg)](http://travis-ci.org/joelburget/haskell-ipld)
 
 > An implementation of IPLD (InterPlanetary Linked Data) in Haskell
 

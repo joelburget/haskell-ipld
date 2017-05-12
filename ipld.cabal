@@ -11,6 +11,7 @@ category:            Network
 build-type:          Simple
 extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
+tested-with: GHC == 7.10.3, GHC == 8.0.2
 
 library
   exposed-modules:
@@ -24,7 +25,7 @@ library
     Network.IPLD.Cid
   -- other-extensions:
   build-depends:
-    base >=4.9 && <4.10,
+    base >= 4.8 && <4.11,
     unordered-containers,
     vector,
     text,
@@ -47,7 +48,8 @@ library
     tasty-hunit,
     hedgehog == 0.2.*,
     containers,
-    turtle
+    turtle,
+    aeson
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -67,3 +69,4 @@ library
 --     tasty,
 --     tasty-hunit
 --   default-language : Haskell2010
+
