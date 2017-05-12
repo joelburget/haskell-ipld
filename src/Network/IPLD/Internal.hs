@@ -1,4 +1,3 @@
-{-# language BangPatterns #-}
 {-# language DeriveGeneric #-}
 {-# language LambdaCase #-}
 {-# language OverloadedStrings #-}
@@ -109,7 +108,6 @@ instance Serialise Value where
       TypeMapLen  -> DagObject <$> decode
       TypeBool    -> DagBool   <$> decodeBool
       TypeNull    -> Null      <$  decodeNull
-
 
       TypeUInt    -> decodeNumberIntegral
       TypeUInt64  -> decodeNumberIntegral
@@ -243,7 +241,7 @@ parseAbsMerklePath = do
   lnk <- parseMerkleLink
   traversal <- (do
     _ <- char '/'
-    takeWhile (not . (== '/')) `sepBy` (char '/')
+    takeWhile (=/ '/') `sepBy` char '/'
     ) <|> pure []
   pure (AbsMerklePath lnk (RelMerklePath traversal))
 
@@ -279,7 +277,7 @@ parseCid = do
           let (header, hashVal) = BS.splitAt 2 byteStr
           [version, codec] <- pure (BS.unpack header)
           case (version, toEnum8 codec) of
-            (1, DagCbor) -> do
+            (1, DagCbor) ->
               case ABS.parseOnly parseMultihash hashVal of
                 Left err -> fail err
                 Right mh -> pure $ Cid Base58Btc 1 DagCbor mh
