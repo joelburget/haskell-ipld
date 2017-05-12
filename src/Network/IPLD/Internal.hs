@@ -140,10 +140,13 @@ linkM f = rewriteM $ \case
 instance IsString Value where
   fromString = TextValue . fromString
 
+newtype RelMerklePath = RelMerklePath [Text]
+  deriving (Eq, Show)
+
 -- | A merkle-path consisting of
 -- * merkle-link
 -- * path traversal
-data MerklePath = MerklePath MerkleLink [Text]
+data AbsMerklePath = AbsMerklePath MerkleLink RelMerklePath
   deriving Show
 
 data TraversalResult a
@@ -151,22 +154,23 @@ data TraversalResult a
   -- | Yield (a, MerklePath)
 
   -- "cross-object traversal"
-  | Yield MerkleLink [Text]
-  | KeyNotFound a [Text]
+  | Yield MerkleLink RelMerklePath
+  | KeyNotFound a RelMerklePath
   deriving (Eq, Show)
 
-traverseValue :: [Text] -> Value -> TraversalResult Value
-traverseValue [] v = Found v
-traverseValue path@(a:as) arr@(DagArray vals) =
+traverseValue :: RelMerklePath -> Value -> TraversalResult Value
+traverseValue (RelMerklePath []) v = Found v
+traverseValue path@(RelMerklePath (a:as)) arr@(DagArray vals) =
   let mayVal = do
         i <- readMaybe (T.unpack a)
         vals ^? ix i
   in case mayVal of
-       Just val -> traverseValue as val
+       Just val -> traverseValue (RelMerklePath as) val
        Nothing -> KeyNotFound arr path
-traverseValue path@(a:as) obj@(DagObject vals) = case vals ^? ix a of
-   Just val -> traverseValue as val
-   Nothing -> KeyNotFound obj path
+traverseValue path@(RelMerklePath (a:as)) obj@(DagObject vals)
+  = case vals ^? ix a of
+      Just val -> traverseValue (RelMerklePath as) val
+      Nothing -> KeyNotFound obj path
 traverseValue path val@(TextValue _) = KeyNotFound val path
 traverseValue path (LinkValue lnk) = Yield lnk path
 
@@ -198,19 +202,19 @@ merkleLink' text = LinkValue <$> merkleLink text
 -- eg:
 --   "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/c"
 --   ->
---   MerklePath ["QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k", "a", "b", "c"]
+--   AbsMerklePath ["QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k", "a", "b", "c"]
 --
-merklePath :: Text -> Either String MerklePath
-merklePath = parseOnly (parseMerklePath <* endOfInput)
+absMerklePath :: Text -> Either String AbsMerklePath
+absMerklePath = parseOnly (parseAbsMerklePath <* endOfInput)
 
-parseMerklePath :: Parser MerklePath
-parseMerklePath = do
+parseAbsMerklePath :: Parser AbsMerklePath
+parseAbsMerklePath = do
   lnk <- parseMerkleLink
   traversal <- (do
     _ <- char '/'
     takeWhile (not . (== '/')) `sepBy` (char '/')
     ) <|> pure []
-  pure (MerklePath lnk traversal)
+  pure (AbsMerklePath lnk (RelMerklePath traversal))
 
 -- "currently, only the ipfs hierarchy is allowed"
 -- TODO: allow option for "/ipfs" or not

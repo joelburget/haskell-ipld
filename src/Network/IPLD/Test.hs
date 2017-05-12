@@ -41,7 +41,7 @@ tests = testGroup "ipld"
     [ testCase "1" $
       let val = TextValue "hello, world"
           expected = Found val
-          actual = traverseValue [] val
+          actual = traverseValue (RelMerklePath []) val
       in actual @?= expected
     ]
   , testGroup "multihash"

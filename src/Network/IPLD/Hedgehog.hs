@@ -37,7 +37,7 @@ genCid = mkCid <$> Gen.bytes (Range.linear 100 200)
 prop_traverse_empty :: Property
 prop_traverse_empty = property $ do
   val <- forAll genValue
-  traverseValue [] val === Found val
+  traverseValue (RelMerklePath []) val === Found val
 
 prop_parse_unparse_cid :: Property
 prop_parse_unparse_cid = property $ do

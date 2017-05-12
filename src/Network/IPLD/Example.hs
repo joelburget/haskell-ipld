@@ -54,13 +54,18 @@ chunkedFileExample = object
     ]
   ]
 
-pathExample1 :: MerklePath
-pathExample1 = MerklePath
+pathExample1 :: AbsMerklePath
+pathExample1 = AbsMerklePath
   (fromJust $ merkleLink "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k")
-  ["a", "b", "c"]
+  (RelMerklePath ["a", "b", "c"])
 
-pathExample2, pathExample3, pathExample4, pathExample5 :: Either String MerklePath
-pathExample2 = merklePath "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/link/c"
-pathExample3 = merklePath "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/link/d/e"
-pathExample4 = merklePath "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/link/foo/name"
-pathExample5 = merklePath "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/foo/name"
+pathExample2, pathExample3, pathExample4, pathExample5
+  :: Either String AbsMerklePath
+pathExample2 = absMerklePath
+  "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/link/c"
+pathExample3 = absMerklePath
+  "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/link/d/e"
+pathExample4 = absMerklePath
+  "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/link/foo/name"
+pathExample5 = absMerklePath
+  "/ipfs/QmUmg7BZC1YP1ca66rRtWKxpXp77WgVHrnv263JtDuvs2k/a/b/foo/name"
