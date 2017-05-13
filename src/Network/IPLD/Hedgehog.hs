@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Network.IPLD.Hedgehog where
+module Network.IPLD.Hedgehog (hedgehogTests) where
 
 import           Control.Applicative
 import qualified Data.Attoparsec.ByteString as ABS
@@ -82,5 +82,5 @@ prop_serialize_round_trip = property $ do
 
 -- prop_graft_hash :: Property
 
-tests :: IO Bool
-tests = checkParallel $$(discover)
+hedgehogTests :: IO Bool
+hedgehogTests = checkParallel $$(discover)

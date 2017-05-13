@@ -6,7 +6,18 @@
 {-# language TypeFamilies #-}
 {-# options_ghc -funbox-strict-fields #-}
 
-module Network.IPLD.Internal where
+module Network.IPLD.Internal
+  ( MerkleLink(..)
+  , AbsMerklePath(..)
+  , RelMerklePath(..)
+  , Value(..)
+  , Row(..)
+  , absMerklePath
+  , (.=)
+  , object
+  , array
+  , merkleLink
+  ) where
 
 import Prelude hiding (takeWhile)
 

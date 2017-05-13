@@ -1,6 +1,6 @@
 {-# language OverloadedStrings #-}
 {-# language MultiWayIf #-}
-module Network.IPLD.Test where
+module Network.IPLD.Test (runTests) where
 
 import Network.IPLD
 import Network.IPLD.Lens

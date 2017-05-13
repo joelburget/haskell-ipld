@@ -1,0 +1,2 @@
+- ignore: {name: "Unused LANGUAGE pragma", within: Network.IPLD.Hedgehog}
+- ignore: {name: "Redundant bracket", within: Network.IPLD.Hedgehog}

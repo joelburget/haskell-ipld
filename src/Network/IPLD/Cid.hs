@@ -4,7 +4,18 @@
 {-# language DeriveAnyClass #-}
 {-# language DeriveDataTypeable #-}
 
-module Network.IPLD.Cid where
+module Network.IPLD.Cid
+  ( Multibase(..)
+  , HumanOrCompact(..)
+  , UnsignedVarint
+  , CodecId(..)
+  , Multicodec(..)
+  , HashFunction(..)
+  , Multihash(..)
+  , Cid(..)
+  , w8ToI -- TODO: don't export
+  , mkCid
+  ) where
 
 import           Crypto.Hash
 import           Data.ByteString (ByteString)

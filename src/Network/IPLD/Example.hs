@@ -1,5 +1,5 @@
 {-# language OverloadedStrings #-}
-module Network.IPLD.Example where
+module Network.IPLD.Example () where
 
 import Data.Maybe (fromJust)
 

@@ -1,7 +1,14 @@
 {-# language LambdaCase #-}
 {-# language Rank2Types #-}
 {-# language FlexibleContexts #-}
-module Network.IPLD.Lens where
+module Network.IPLD.Lens
+  ( _DagObject
+  , _DagArray
+  , key
+  , members
+  , nth
+  , values
+  ) where
 
 -- Most code in this module taken from:
 -- https://hackage.haskell.org/package/lens-aeson-1.0.1/docs/src/Data-Aeson-Lens.html
