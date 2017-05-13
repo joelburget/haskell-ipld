@@ -1,6 +1,6 @@
 {-# language OverloadedStrings #-}
 {-# language MultiWayIf #-}
-module Network.IPLD.Test (runTests) where
+module Main (main) where
 
 import Network.IPLD
 import Network.IPLD.Lens
@@ -17,8 +17,8 @@ import qualified Data.HashMap.Strict as H
 import qualified Data.Vector as V
 import qualified Data.ByteString.Base16 as Hex
 
-runTests :: IO ()
-runTests = defaultMain tests
+main :: IO ()
+main = defaultMain tests
 
 -- "put to /dev/null" (get cid)
 putNull :: IsIpld a => a -> Cid

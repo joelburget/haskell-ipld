@@ -17,13 +17,10 @@ library
   exposed-modules:
     Network.IPLD
     Network.IPLD.Example
-    Network.IPLD.Test
-    Network.IPLD.Hedgehog
     Network.IPLD.Lens
   other-modules:
     Network.IPLD.Internal
     Network.IPLD.Cid
-  -- other-extensions:
   build-depends:
     base >= 4.8 && <4.11,
     unordered-containers,
@@ -41,32 +38,50 @@ library
     lens,
     mtl,
     hashable,
-    scientific,
+    aeson,
+    scientific
+  hs-source-dirs:      src
+  default-language:    Haskell2010
 
-    -- Test
+test-suite unit-tests
+  type             : exitcode-stdio-1.0
+  hs-source-dirs   : tests
+  main-is          : UnitTest.hs
+  build-depends    :
+    base,
+    unordered-containers,
+    vector,
+    text,
+    attoparsec,
+    binary-serialise-cbor,
+    lens,
+    bytestring,
+    base16-bytestring,
+    ipld,
     tasty,
-    tasty-hunit,
+    tasty-hunit
+  default-language : Haskell2010
+
+test-suite property-tests
+  type             : exitcode-stdio-1.0
+  hs-source-dirs   : tests
+  main-is          : HedgehogTest.hs
+  build-depends    :
+    base,
+    unordered-containers,
+    vector,
+    text,
+    attoparsec,
+    binary-serialise-cbor,
+    ipld,
+    bytestring,
+    scientific,
+    aeson,
+
     hedgehog == 0.2.*,
     containers,
     turtle,
     aeson,
     foldl
-  hs-source-dirs:      src
-  default-language:    Haskell2010
-
--- test-suite unit-tests
---   type             : exitcode-stdio-1.0
---   hs-source-dirs   : tests
---   main-is          : test.hs
---   build-depends    :
---     base,
---     unordered-containers,
---     vector,
---     text,
---     attoparsec,
---     binary-serialise-cbor,
---     ipld,
---     tasty,
---     tasty-hunit
---   default-language : Haskell2010
+  default-language : Haskell2010
 

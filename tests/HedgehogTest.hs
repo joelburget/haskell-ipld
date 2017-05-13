@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
-module Network.IPLD.Hedgehog (hedgehogTests) where
+module Main (main) where
 
 import           Control.Applicative
 import qualified Control.Foldl as Fold
@@ -20,9 +20,9 @@ import           Data.Binary.Serialise.CBOR (serialise, deserialise)
 import           Turtle
 import qualified Turtle.Bytes as TB
 import           Data.Scientific
+import           System.Exit (exitFailure)
 
-import Network.IPLD.Cid
-import Network.IPLD.Internal
+import Network.IPLD
 
 genTextValue :: Monad m => Gen m Text
 genTextValue = Gen.text (Range.linear 0 100) Gen.unicode
@@ -96,5 +96,7 @@ prop_serialize_round_trip = property $ do
 
 -- prop_graft_hash :: Property
 
-hedgehogTests :: IO Bool
-hedgehogTests = checkParallel $$(discover)
+main :: IO ()
+main = do
+  good <- checkParallel $$(discover)
+  unless good exitFailure
