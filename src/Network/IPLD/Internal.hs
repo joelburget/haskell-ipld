@@ -18,10 +18,14 @@ module Network.IPLD.Internal
   , (.=)
   , object
   , array
+  , valueCid
   , merkleLink
   , traverseValue
   , parseCid -- TODO: move to Cid module
   , toAeson
+  , fromAeson
+  , jsonEncode
+  , jsonDecode
   , graft
   , graftM
   , link
@@ -41,6 +45,8 @@ import           Control.Monad (when)
 import qualified Data.Aeson as Aeson
 import           Data.ByteString.Base58
 import           Data.ByteString.Lazy (toStrict)
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString as SBS
 import           Data.Data
 import           Data.Functor.Identity
 import           Data.HashMap.Strict (HashMap)
@@ -99,6 +105,34 @@ toAeson = \case
   DagNumber num  -> Aeson.Number num
   DagBool   bool -> Aeson.Bool   bool
   Null           -> Aeson.Null
+
+fromAeson :: Aeson.Value -> Value
+fromAeson = \case
+  Aeson.Object hmap ->
+    let defaultObj = DagObject (fromAeson <$> hmap)
+    in maybe defaultObj id $ do
+         ["/"]                       <- pure $ HashMap.keys hmap
+         Just (Aeson.String linkStr) <- pure $ hmap ^? ix "/"
+         Right cid                   <- pure $
+           ABS.parseOnly parseCid (encodeUtf8 linkStr)
+         pure $ LinkValue (MerkleLink cid)
+  Aeson.Array  arr  -> DagArray  (fromAeson <$> arr)
+  Aeson.String text               -> TextValue text
+  Aeson.Number num                -> DagNumber num
+  Aeson.Bool   bool               -> DagBool   bool
+  Aeson.Null                      -> Null
+
+infix 8 <$$>
+(<$$>) :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
+(<$$>) = fmap . fmap
+
+-- | JSON-encode a value.
+jsonEncode :: Value -> SBS.ByteString
+jsonEncode = LBS.toStrict . Aeson.encode . toAeson
+
+-- | JSON-decode a value.
+jsonDecode :: SBS.ByteString -> Maybe Value
+jsonDecode = fromAeson <$$> Aeson.decode' . LBS.fromStrict
 
 newtype MerkleLink = MerkleLink Cid -- MultihashDigest
   deriving (Eq, Show, Generic, Hashable, Typeable, Data)
@@ -168,8 +202,11 @@ instance Ixed Value where
 
 instance Plated Value
 
+valueCid :: Value -> Cid
+valueCid = mkCid . toStrict . serialise
+
 linkToM :: Value -> MerkleLink
-linkToM = MerkleLink . mkCid . toStrict . serialise
+linkToM = MerkleLink . valueCid
 
 linkToV :: Value -> Value
 linkToV = LinkValue . linkToM

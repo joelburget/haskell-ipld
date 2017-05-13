@@ -21,6 +21,7 @@ library
     Network.IPLD
     Network.IPLD.Example
     Network.IPLD.Lens
+    Network.IPLD.Client
   other-modules:
     Network.IPLD.Internal
     Network.IPLD.Cid
@@ -42,7 +43,9 @@ library
     mtl,
     hashable,
     aeson,
-    scientific
+    scientific,
+    turtle,
+    foldl
   hs-source-dirs:      src
   default-language:    Haskell2010
 

@@ -23,6 +23,7 @@ import           Data.Scientific
 import           System.Exit (exitFailure)
 
 import Network.IPLD
+import Network.IPLD.Client
 
 genTextValue :: Monad m => Gen m Text
 genTextValue = Gen.text (Range.linear 0 100) Gen.unicode
@@ -64,10 +65,6 @@ prop_parse_unparse_cid = property $ do
       parsed = ABS.parseOnly (parseCid <* ABS.endOfInput) cidStr
   parsed === Right cid
 
--- | JSON-encode a value.
-encode :: Value -> SBS.ByteString
-encode = LBS.toStrict . Aeson.encode . toAeson
-
 -- | Check that our CID matches the one IPFS generates.
 prop_matches_ipfs :: Property
 prop_matches_ipfs = property $ do
@@ -78,13 +75,8 @@ prop_matches_ipfs = property $ do
 
   value <- forAll genValue
 
-  rawLine <- fold
-    (TB.inshell "ipfs dag put -" (pure (encode value)))
-    Fold.mconcat
-  Right ipfsCid <- pure $ ABS.parseOnly parseCid rawLine
-
-  let ourCid = mkCid $ LBS.toStrict $ serialise value
-  ourCid === ipfsCid
+  Right ipfsCid <- liftIO $ put value
+  valueCid value === ipfsCid
 
 prop_serialize_round_trip :: Property
 prop_serialize_round_trip = property $ do
