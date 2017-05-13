@@ -1,12 +1,15 @@
 name:                ipld
 version:             0.1.0.0
--- synopsis:
--- description:
+synopsis:            InterPlanetary Linked Data
+description:
+  An implementation of IPLD (InterPlanetary Linked Data) in Haskell.
+  .
+  See <https://github.com/ipld/ipld IPLD> for the spec this implemements.
 license:             BSD3
 license-file:        LICENSE
 author:              Joel Burget
 maintainer:          joelburget@gmail.com
--- copyright:
+copyright:           Copyright (c) 2017 Joel Burget
 category:            Network
 build-type:          Simple
 extra-source-files:  ChangeLog.md
