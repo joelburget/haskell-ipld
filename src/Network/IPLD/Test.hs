@@ -15,6 +15,7 @@ import           Test.Tasty.HUnit
 import qualified Data.Attoparsec.ByteString as ABS
 import qualified Data.HashMap.Strict as H
 import qualified Data.Vector as V
+import qualified Data.ByteString.Base16 as Hex
 
 runTests :: IO ()
 runTests = defaultMain tests
@@ -75,11 +76,13 @@ tests = testGroup "ipld"
 
   , testGroup "parsing"
     [ testCase "parse cid" $
-      let expected = Right $
-            Cid Base58Btc 1 DagCbor $ Multihash Sha2_256 32
-              "QmQCQWTmBKvTqY8xRo3RsXfS1iiXriinYKVCY5eSUE8zaT"
-            -- mkCid "uAnHCHH7uXZ87iMR3ZNx1L9UnDyACnKrxmWQrBVxt9zDVH"
-          cidStr = "zdpuAnHCHH7uXZ87iMR3ZNx1L9UnDyACnKrxmWQrBVxt9zDVH"
+      let cidStr = "zdpuAnHCHH7uXZ87iMR3ZNx1L9UnDyACnKrxmWQrBVxt9zDVH"
+
+          (expectedBytes, "") = Hex.decode
+            "1b9aaba765ec0aeaf79e1ee4cc26782b4259586c9ea1d49f5dfc2e2667ff9420"
+          expected = Right $
+            Cid Base58Btc 1 DagCbor $ Multihash Sha2_256 32 expectedBytes
+
           actual = ABS.parseOnly (parseCid <* ABS.endOfInput) cidStr
       in actual @?= expected
     ]

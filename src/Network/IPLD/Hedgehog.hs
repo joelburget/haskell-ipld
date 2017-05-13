@@ -2,8 +2,11 @@
 module Network.IPLD.Hedgehog (hedgehogTests) where
 
 import           Control.Applicative
+import qualified Control.Foldl as Fold
+import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.ByteString as ABS
-import           Data.ByteString.Lazy (toStrict)
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString as SBS
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Map as Map
@@ -12,9 +15,9 @@ import qualified Data.Vector as V
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-import           Data.Binary.Serialise.CBOR
+import           Data.Binary.Serialise.CBOR (serialise, deserialise)
 import           Turtle
-import           Control.Monad.Except
+import qualified Turtle.Bytes as TB
 import           Data.Scientific
 
 import Network.IPLD.Cid
@@ -46,31 +49,41 @@ genDagObject range =
 genCid :: Monad m => Gen m Cid
 genCid = mkCid <$> Gen.bytes (Range.linear 100 200)
 
+-- | Traversing an empty path gives the original value.
 prop_traverse_empty :: Property
 prop_traverse_empty = property $ do
   val <- forAll genValue
   traverseValue (RelMerklePath []) val === Found val
 
+-- | Check that `parse . unparse == id`.
 prop_parse_unparse_cid :: Property
 prop_parse_unparse_cid = property $ do
-  -- rawHash <- Gen.bytes (Range.constant 32)
-  -- let multihash = Multihash Sha2_256 32 rawHash
-  --     cid = Cid Base58Btc 1 DagCbor multihash
   cid <- forAll genCid
   let cidStr = compact cid
       parsed = ABS.parseOnly (parseCid <* ABS.endOfInput) cidStr
   parsed === Right cid
 
--- prop_matches_ipfs :: Property
--- prop_matches_ipfs = property $ do
---   -- TODO: check for ipfs version
---   hasIpfs <- shell "which ipfs" ""
---   when (hasIpfs /= ExitSuccess) (throwError "can't find ipfs executable")
+-- | JSON-encode a value.
+encode :: Value -> SBS.ByteString
+encode = LBS.toStrict . Aeson.encode . toAeson
 
---   value <- forAll genValue
---   ipfsHash <- shell "ipfs dag put -" -- XXX
---   let ourHash = mkCid $ toStrict $ serialise value
---   ourHash === ipfsHash
+-- | Check that our CID matches the one IPFS generates.
+prop_matches_ipfs :: Property
+prop_matches_ipfs = property $ do
+  -- TODO:
+  --   * check for ipfs version (check has dag command)
+  --   * only do this once?
+  (ExitSuccess, _stdout, _stderr) <- shellStrictWithErr "which ipfs" ""
+
+  value <- forAll genValue
+
+  rawLine <- fold
+    (TB.inshell "ipfs dag put -" (pure (encode value)))
+    Fold.mconcat
+  Right ipfsCid <- pure $ ABS.parseOnly parseCid rawLine
+
+  let ourCid = mkCid $ LBS.toStrict $ serialise value
+  ourCid === ipfsCid
 
 prop_serialize_round_trip :: Property
 prop_serialize_round_trip = property $ do

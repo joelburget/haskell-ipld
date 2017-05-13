@@ -49,7 +49,8 @@ library
     hedgehog == 0.2.*,
     containers,
     turtle,
-    aeson
+    aeson,
+    foldl
   hs-source-dirs:      src
   default-language:    Haskell2010
 
