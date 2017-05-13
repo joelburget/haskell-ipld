@@ -253,7 +253,7 @@ parseAbsMerklePath = do
   lnk <- parseMerkleLink
   traversal <- (do
     _ <- char '/'
-    takeWhile (=/ '/') `sepBy` char '/'
+    takeWhile (/= '/') `sepBy` char '/'
     ) <|> pure []
   pure (AbsMerklePath lnk (RelMerklePath traversal))
 
