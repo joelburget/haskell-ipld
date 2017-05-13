@@ -1,5 +1,16 @@
 {-# language OverloadedStrings #-}
-module Network.IPLD.Example () where
+module Network.IPLD.Example
+  ( linkExample
+  , helloWorldExample
+  , fooBazExample
+  , catPhotoExample
+  , chunkedFileExample
+  , pathExample1
+  , pathExample2
+  , pathExample3
+  , pathExample4
+  , pathExample5
+  ) where
 
 import Data.Maybe (fromJust)
 

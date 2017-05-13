@@ -12,11 +12,22 @@ module Network.IPLD.Internal
   , RelMerklePath(..)
   , Value(..)
   , Row(..)
+  , TraversalResult(..)
+  , IsIpld(..)
   , absMerklePath
   , (.=)
   , object
   , array
   , merkleLink
+  , traverseValue
+  , parseCid -- TODO: move to Cid module
+  , toAeson
+  , graft
+  , graftM
+  , link
+  , linkM
+  , linkToM
+  , linkToV
   ) where
 
 import Prelude hiding (takeWhile)
@@ -25,8 +36,8 @@ import           Control.Applicative
 import           Control.Lens
   ((^?), Index, IxValue, Ixed(..), transformM, Plated, rewriteM)
 import           Control.Monad (when)
-import           Control.Monad.State
-import           Control.Monad.Writer
+-- import           Control.Monad.State
+-- import           Control.Monad.Writer
 import qualified Data.Aeson as Aeson
 import           Data.ByteString.Base58
 import           Data.ByteString.Lazy (toStrict)
@@ -246,8 +257,8 @@ merkleLink text = case parseOnly (parseMerkleLink <* endOfInput) text of
   Left _     -> Nothing
   Right lnk -> Just lnk
 
-merkleLink' :: Text -> Maybe Value
-merkleLink' text = LinkValue <$> merkleLink text
+-- merkleLink' :: Text -> Maybe Value
+-- merkleLink' text = LinkValue <$> merkleLink text
 
 -- $parsing
 

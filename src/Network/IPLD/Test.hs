@@ -9,7 +9,7 @@ import           Control.Lens hiding ((.=))
 import           Data.Binary.Serialise.CBOR
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Lazy (toStrict)
-import           Data.Text (Text)
+-- import           Data.Text (Text)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import qualified Data.Attoparsec.ByteString as ABS
@@ -27,8 +27,8 @@ putNull = mkCid . toStrict . serialise . toIpld
 putNullC :: IsIpld a => a -> ByteString
 putNullC = compact . putNull
 
-putNullH :: IsIpld a => a -> Text
-putNullH = human . putNull
+-- putNullH :: IsIpld a => a -> Text
+-- putNullH = human . putNull
 
 tests :: TestTree
 tests = testGroup "ipld"
