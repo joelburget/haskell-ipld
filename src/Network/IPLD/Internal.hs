@@ -228,7 +228,7 @@ graft f = runIdentity . graftM (Identity . f)
 graftM :: Monad m => (MerkleLink -> m Value) -> Value -> m Value
 graftM f = transformM $ \case
   LinkValue lnk -> f lnk
-  other          -> pure other
+  other         -> pure other
 
 link :: (MerkleLink -> Value) -> Value -> Value
 link f = runIdentity . linkM (Identity . f)
@@ -236,7 +236,7 @@ link f = runIdentity . linkM (Identity . f)
 linkM :: Monad m => (MerkleLink -> m Value) -> Value -> m Value
 linkM f = rewriteM $ \case
   LinkValue lnk -> Just <$> f lnk
-  _              -> pure Nothing
+  _             -> pure Nothing
 
 instance IsString Value where
   fromString = TextValue . fromString

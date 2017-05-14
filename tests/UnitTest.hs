@@ -142,8 +142,7 @@ tests = testGroup "ipld"
         in actual @?= expected
 
       , testCase "erroring when we can't find a link" $
-        let f = Left
-            actual = linkM f root
+        let actual = linkM Left root
             expected = Left (linkToM childA)
         in actual @?= expected
 
