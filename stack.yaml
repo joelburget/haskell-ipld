@@ -1,12 +1,9 @@
-# Specifies the GHC version and set of packages available (e.g., lts-3.5, nightly-2015-09-21, ghc-7.10.2)
-resolver: nightly-2017-02-03
+resolver: lts-8.13
 
-# Local packages, usually specified by relative directory name
 packages:
 - '.'
 - './binary-serialise-cbor'
 
-# Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 extra-deps:
 - multihash-0.1.2
 - base58-bytestring-0.1.0
