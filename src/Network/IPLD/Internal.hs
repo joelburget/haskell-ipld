@@ -380,6 +380,9 @@ class IsIpld a where
   -- TODO: more expressive failure info
   fromIpld :: Value -> Maybe a
 
+  cidOf :: a -> Cid
+  cidOf = valueCid . toIpld
+
 instance IsIpld Value where
   toIpld = id
   fromIpld = Just
