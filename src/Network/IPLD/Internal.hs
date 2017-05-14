@@ -51,6 +51,7 @@ import           Data.Data
 import           Data.Functor.Identity
 import           Data.HashMap.Strict (HashMap)
 import           Data.Hashable
+import           Data.Maybe (fromMaybe)
 import           Data.Monoid ((<>))
 import           Data.Scientific
 import           Data.String
@@ -110,7 +111,7 @@ fromAeson :: Aeson.Value -> Value
 fromAeson = \case
   Aeson.Object hmap ->
     let defaultObj = DagObject (fromAeson <$> hmap)
-    in maybe defaultObj id $ do
+    in fromMaybe defaultObj $ do
          ["/"]                       <- pure $ HashMap.keys hmap
          Just (Aeson.String linkStr) <- pure $ hmap ^? ix "/"
          Right cid                   <- pure $

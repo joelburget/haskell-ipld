@@ -1,5 +1,10 @@
 {-# language OverloadedStrings #-}
-module Network.IPLD.Client where
+module Network.IPLD.Client
+  ( get
+  , put
+  , pin
+  , unpin
+  ) where
 
 import qualified Control.Foldl as Fold
 import qualified Data.Attoparsec.ByteString as ABS
