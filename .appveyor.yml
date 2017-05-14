@@ -8,6 +8,7 @@ before_test:
 - 7z x stack.zip stack.exe
 - curl -oipfs.zip https://ipfs.io/ipns/dist.ipfs.io/go-ipfs/v0.4.9-rc2/go-ipfs_v0.4.9-rc2_windows-386.zip
 - 7z x ipfs.zip ipfs.exe
+- ipfs init
 - git submodule update --init --recursive
 
 clone_folder: "c:\\project"
