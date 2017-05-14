@@ -34,15 +34,15 @@ matrix:
       addons: {apt: {packages: [ghc-ppa-tools,cabal-install-head,ghc-8.0.2], sources: [hvr-ghc]}}
 
 before_install:
- - HC=${CC}
- - unset CC
- - PATH=/opt/ghc/bin:/opt/ghc-ppa-tools/bin:$PATH
- - PKGNAME='ipld'
  - GO_IPFS_DIR="${TRAVIS_BUILD_DIR}/../go-ipfs"
  - GO_IPFS_ARCHIVE_BASENAME="go-ipfs_v0.4.9-rc2_linux-amd64.tar.gz"
  - GO_IPFS_ARCHIVE_FULLPATH="${GO_IPFS_DIR}/${GO_IPFS_ARCHIVE_BASENAME}"
  - GO_IPFS_CMD_BASENAME="ipfs"
  - GO_IPFS_CMD="${GO_IPFS_DIR}/go-ipfs/${GO_IPFS_CMD_BASENAME}"
+ - HC=${CC}
+ - unset CC
+ - PATH=${GO_IPFS_DIR}/go-ipfs:/opt/ghc/bin:/opt/ghc-ppa-tools/bin:$PATH
+ - PKGNAME='ipld'
 
 install:
  - cabal --version
