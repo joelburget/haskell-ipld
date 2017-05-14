@@ -38,6 +38,11 @@ before_install:
  - unset CC
  - PATH=/opt/ghc/bin:/opt/ghc-ppa-tools/bin:$PATH
  - PKGNAME='ipld'
+ - GO_IPFS_DIR="${TRAVIS_BUILD_DIR}/../go-ipfs"
+ - GO_IPFS_ARCHIVE_BASENAME="go-ipfs_v0.4.9-rc2_linux-amd64.tar.gz"
+ - GO_IPFS_ARCHIVE_FULLPATH="${GO_IPFS_DIR}/${GO_IPFS_ARCHIVE_BASENAME}"
+ - GO_IPFS_CMD_BASENAME="ipfs"
+ - GO_IPFS_CMD="${GO_IPFS_DIR}/go-ipfs/${GO_IPFS_CMD_BASENAME}"
 
 install:
  - cabal --version
@@ -50,6 +55,21 @@ install:
  - rm -f cabal.project.freeze
  - cabal new-build -w ${HC} ${TEST} ${BENCH} --dep -j2 all
  - cabal new-build -w ${HC} --disable-tests --disable-benchmarks --dep -j2 all
+ - |
+   if [ -e "${GO_IPFS_ARCHIVE_FULLPATH}" ] ; then
+     echo "${GO_IPFS_ARCHIVE_FULLPATH} exists, not downloading"
+   else
+     echo "${GO_IPFS_ARCHIVE_FULLPATH} does not exist, downloading"
+     mkdir -p "${GO_IPFS_DIR}"
+     travis_retry wget --quiet -O "${GO_IPFS_ARCHIVE_FULLPATH}" "https://ipfs.io/ipns/dist.ipfs.io/go-ipfs/v0.4.9-rc2/${GO_IPFS_ARCHIVE_BASENAME}"
+   fi
+ - |
+   if [ -x "${GO_IPFS_CMD}" ] ; then
+     echo "${GO_IPFS_CMD} is present, not extracting"
+   else
+     echo "${GO_IPFS_CMD} is not present, extracting"
+     tar -C "${GO_IPFS_DIR}" -vzxf "${GO_IPFS_ARCHIVE_FULLPATH}"
+   fi
 
 # Here starts the actual work to be performed for the package under test;
 # any command which exits with a non-zero exit code causes the build to fail.
