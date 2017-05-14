@@ -57,7 +57,7 @@ data Multibase
   | Base64Pad
   | Base64Url
   | Base64UrlPad
-  deriving (Eq, Show, Generic, Hashable, Typeable, Data)
+  deriving (Eq, Show, Generic, Hashable, Typeable, Data, Ord)
 
 class HumanOrCompact a where
   human :: a -> Text
@@ -157,7 +157,7 @@ type UnsignedVarint = Word8
 
 data CodecId
   = DagCbor
-  deriving (Eq, Show, Generic, Hashable, Typeable, Data)
+  deriving (Eq, Show, Generic, Hashable, Typeable, Data, Ord)
 
 instance Enum CodecId where
   toEnum = \case
@@ -184,7 +184,7 @@ data HashFunction
   | Sha3_256
   | Sha3_384
   | Sha3_512
-  deriving (Eq, Show, Generic, Hashable, Typeable, Data)
+  deriving (Eq, Show, Generic, Hashable, Typeable, Data, Ord)
 
 instance Enum HashFunction where
   toEnum = \case
@@ -225,7 +225,7 @@ data Multihash = Multihash
   HashFunction   -- hash function
   UnsignedVarint -- digest size (in bytes)
   ByteString     -- hash function output
-  deriving (Eq, Generic, Hashable, Typeable, Data)
+  deriving (Eq, Generic, Hashable, Typeable, Data, Ord)
 
 instance Show Multihash where
   showsPrec d (Multihash fun size bs) = showParen (d > 10) $
@@ -269,7 +269,7 @@ data Cid = Cid
   -- Multicodec
   CodecId
   Multihash
-  deriving (Eq, Show, Generic, Hashable, Typeable, Data)
+  deriving (Eq, Show, Generic, Hashable, Typeable, Data, Ord)
 
 -- TODO: use http://hackage.haskell.org/package/concise-0.1.0.0/docs/Control-Lens-Cons-Extras.html ?
 toByteString :: BA.ByteArrayAccess a => a -> ByteString
