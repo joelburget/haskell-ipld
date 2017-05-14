@@ -21,6 +21,7 @@ module Network.IPLD.Internal
   , valueCid
   , merkleLink
   , traverseValue
+  , readCid
   , parseCid -- TODO: move to Cid module
   , toAeson
   , fromAeson
@@ -333,6 +334,11 @@ parseIpfsMultiaddr = do
   case ABS.parseOnly parseCid (encodeUtf8 rest) of
     Left err -> fail err
     Right x -> pure x
+
+readCid :: SBS.ByteString -> Maybe Cid
+readCid str = case ABS.parseOnly parseCid str of
+  Left _err -> Nothing
+  Right x   -> Just x
 
 base58Class :: String
 base58Class = B8.unpack $ unAlphabet bitcoinAlphabet
