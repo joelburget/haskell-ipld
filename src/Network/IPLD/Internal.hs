@@ -1,9 +1,16 @@
+{-# language CPP #-}
+{-# language DefaultSignatures #-}
+{-# language DeriveDataTypeable #-}
 {-# language DeriveGeneric #-}
+{-# language FlexibleContexts #-}
+{-# language FlexibleInstances #-}
+{-# language GeneralizedNewtypeDeriving #-}
 {-# language LambdaCase #-}
 {-# language OverloadedStrings #-}
-{-# language GeneralizedNewtypeDeriving #-}
-{-# language DeriveDataTypeable #-}
 {-# language TypeFamilies #-}
+{-# language TypeOperators #-}
+{-# language TypeSynonymInstances #-}
+{-# language ViewPatterns #-}
 {-# options_ghc -funbox-strict-fields #-}
 
 module Network.IPLD.Internal
@@ -52,6 +59,7 @@ import           Data.Data
 import           Data.Functor.Identity
 import           Data.HashMap.Strict (HashMap)
 import           Data.Hashable
+import           Data.Int
 import           Data.Maybe (fromMaybe)
 import           Data.Monoid ((<>))
 import           Data.Scientific
@@ -59,7 +67,7 @@ import           Data.String
 import           Data.Text (Text)
 import           Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import           Data.Vector (Vector)
-import           Data.Word (Word8)
+import           Data.Word
 import           GHC.Generics
 import           Text.Read
 import qualified Data.ByteString as BS
@@ -188,6 +196,19 @@ instance Serialise Value where
 
       _ -> fail $ "unexpected CBOR token type for IPLD value: " ++ show tkty
 
+instance IsString Value where
+  fromString = TextValue . fromString
+
+-- TODO: think about whether we want this instance.
+--
+-- Inspired by Turtle.Shell's instance:
+-- https://hackage.haskell.org/package/turtle-1.3.3/docs/src/Turtle-Shell.html#line-159
+instance Num Value where
+    fromInteger = DagNumber . fromInteger
+
+    -- (+) = (<|>)
+    -- (*) = (<>)
+
 data Row
   -- TODO: should LinkRow exist?
   = LinkRow MerkleLink
@@ -238,9 +259,6 @@ linkM :: Monad m => (MerkleLink -> m Value) -> Value -> m Value
 linkM f = rewriteM $ \case
   LinkValue lnk -> Just <$> f lnk
   _             -> pure Nothing
-
-instance IsString Value where
-  fromString = TextValue . fromString
 
 newtype RelMerklePath = RelMerklePath [Text]
   deriving (Eq, Show)
@@ -384,8 +402,14 @@ parseMultihash = do
 class IsIpld a where
   toIpld :: a -> Value
 
+  default toIpld :: (Generic a, GToIpld (Rep a)) => a -> Value
+  toIpld = gToIpld . from
+
   -- TODO: more expressive failure info
   fromIpld :: Value -> Maybe a
+
+  default fromIpld :: (Generic a, GFromIpld (Rep a)) => Value -> Maybe a
+  fromIpld = to <$$> gFromIpld
 
   cidOf :: a -> Cid
   cidOf = valueCid . toIpld
@@ -393,3 +417,159 @@ class IsIpld a where
 instance IsIpld Value where
   toIpld = id
   fromIpld = Just
+
+instance IsIpld Bool where
+instance IsIpld Char where
+  toIpld c = TextValue (T.pack [c])
+  fromIpld = \case
+    (TextValue (T.unpack -> [c])) -> Just c
+    _ -> Nothing
+
+#define IntInstance(I)                 \
+instance IsIpld (I) where {            \
+  toIpld = DagNumber . fromIntegral;   \
+  fromIpld = \case {                   \
+    DagNumber n -> toBoundedInteger n; \
+    _ -> Nothing;                      \
+  }                                    \
+}
+
+IntInstance(Int)
+IntInstance(Int8)
+IntInstance(Int16)
+IntInstance(Int32)
+IntInstance(Int64)
+IntInstance(Word8)
+IntInstance(Word16)
+IntInstance(Word32)
+IntInstance(Word64)
+
+#define FloatingInstance(I)                       \
+instance IsIpld (I) where {                       \
+  toIpld = DagNumber . fromFloatDigits;           \
+  fromIpld = \case {                              \
+    DagNumber n -> case toBoundedRealFloat n of { \
+      Left _ -> Nothing;                          \
+      Right f -> Just f;                          \
+    };                                            \
+    _ -> Nothing;                                 \
+  }                                               \
+}
+
+FloatingInstance(Double)
+FloatingInstance(Float)
+
+-- instance IsIpld Integer
+-- instance IsIpld Ordering
+
+instance IsIpld Text where
+  toIpld = TextValue
+  fromIpld = \case
+    TextValue str -> Just str
+    _             -> Nothing
+
+-- instance IsIpld a => IsIpld (Vector a)
+-- instance IsIpld a => IsIpld (HashSet a)
+
+-- TODO IsIpldKey?
+-- instance IsIpld a => IsIpld (HashMap Text a)
+-- instance IsIpld a => IsIpld (Map Text a)
+
+instance IsIpld ()
+instance (IsIpld a, IsIpld b) => IsIpld (a, b)
+instance (IsIpld a, IsIpld b, IsIpld c) => IsIpld (a, b, c)
+instance (IsIpld a, IsIpld b, IsIpld c, IsIpld d) => IsIpld (a, b, c, d)
+instance (IsIpld a, IsIpld b, IsIpld c, IsIpld d, IsIpld e)
+  => IsIpld (a, b, c, d, e)
+instance (IsIpld a, IsIpld b, IsIpld c, IsIpld d, IsIpld e, IsIpld f)
+  => IsIpld (a, b, c, d, e, f)
+instance (IsIpld a, IsIpld b, IsIpld c, IsIpld d, IsIpld e, IsIpld f, IsIpld g)
+  => IsIpld (a, b, c, d, e, f, g)
+instance (IsIpld a, IsIpld b) => IsIpld (Either a b)
+instance IsIpld a => IsIpld [a]
+instance IsIpld a => IsIpld (Maybe a)
+
+instance IsIpld Cid where
+  toIpld = TextValue . decodeUtf8 . compact
+  fromIpld = \case
+    LinkValue (MerkleLink cid) -> Just cid
+    -- TextValue str -> case ABS.parseOnly parseCid (encodeUtf8 str) of
+    --   Right cid -> Just cid
+    --   Left _err -> Nothing
+    _ -> Nothing
+
+--------------------------------------------------------------------------------
+-- Generic instances
+
+-- Quote:
+--
+-- Factored into two classes because this makes GHC optimize the
+-- instances faster. This doesn't matter for builds of binary, but it
+-- matters a lot for end-users who write 'instance Binary T'. See
+-- also: https://ghc.haskell.org/trac/ghc/ticket/9630
+
+class GToIpld f where
+  gToIpld :: f a -> Value
+
+class GFromIpld f where
+  gFromIpld :: Value -> Maybe (f a)
+
+instance GToIpld V1 where
+  -- Data types without constructors are still serialised as null value
+  -- TODO: fact check this
+  gToIpld _ = Null
+
+instance GFromIpld V1 where
+  gFromIpld = error "V1 don't have contructors" <$ pure ()
+
+instance GToIpld U1 where
+  -- Constructors without fields are serialised as an empty array
+  gToIpld _ = array []
+
+instance GFromIpld U1 where
+  gFromIpld = \case
+    DagArray (V.null -> True) -> pure U1
+    _ -> Nothing
+
+instance GToIpld a => GToIpld (M1 i c a) where
+  -- Metadata (constructor name, etc) is skipped
+  gToIpld = gToIpld . unM1
+
+instance GFromIpld a => GFromIpld (M1 i c a) where
+  gFromIpld = M1 <$$> gFromIpld
+
+instance IsIpld a => GToIpld (K1 i a) where
+  gToIpld (K1 a) = array
+    [ DagNumber 0
+    , toIpld a
+    ]
+
+instance IsIpld a => GFromIpld (K1 i a) where
+  gFromIpld = \case
+    DagArray (V.toList -> [DagNumber 0, a]) -> K1 <$> fromIpld a
+    _                  -> Nothing
+
+instance (GToIpld f, GToIpld g) => GToIpld (f :*: g) where
+  -- Products are serialised as N-tuples with 0 constructor tag
+  gToIpld (f :*: g) = array
+    [ gToIpld f
+    , gToIpld g
+    ]
+
+instance (GFromIpld f, GFromIpld g) => GFromIpld (f :*: g) where
+  gFromIpld = \case
+    DagArray (V.toList -> [fs, gs]) -> (:*:)
+      <$> gFromIpld fs
+      <*> gFromIpld gs
+    _ -> Nothing
+
+instance (GToIpld f, GToIpld g) => GToIpld (f :+: g) where
+  gToIpld (L1 x) = array [0, gToIpld x]
+  gToIpld (R1 x) = array [1, gToIpld x]
+
+instance (GFromIpld f, GFromIpld g) => GFromIpld (f :+: g) where
+  gFromIpld (DagArray (V.toList -> [tag, body])) = case tag of
+    0 -> L1 <$> gFromIpld body
+    1 -> R1 <$> gFromIpld body
+    _ -> Nothing
+  gFromIpld _ = Nothing
