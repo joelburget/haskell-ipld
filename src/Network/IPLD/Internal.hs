@@ -58,6 +58,7 @@ import qualified Data.ByteString as SBS
 import           Data.Data
 import           Data.Functor.Identity
 import           Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HashMap
 import           Data.Hashable
 import           Data.Int
 import           Data.Maybe (fromMaybe)
@@ -73,7 +74,6 @@ import           Text.Read
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Char8 as B8
-import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Text as T
 import qualified Data.Vector as V
 
@@ -476,6 +476,8 @@ instance IsIpld Text where
 -- instance IsIpld a => IsIpld (Map Text a)
 
 instance IsIpld ()
+
+-- TODO: serialize tuples as arrays
 instance (IsIpld a, IsIpld b) => IsIpld (a, b)
 instance (IsIpld a, IsIpld b, IsIpld c) => IsIpld (a, b, c)
 instance (IsIpld a, IsIpld b, IsIpld c, IsIpld d) => IsIpld (a, b, c, d)
@@ -485,7 +487,12 @@ instance (IsIpld a, IsIpld b, IsIpld c, IsIpld d, IsIpld e, IsIpld f)
   => IsIpld (a, b, c, d, e, f)
 instance (IsIpld a, IsIpld b, IsIpld c, IsIpld d, IsIpld e, IsIpld f, IsIpld g)
   => IsIpld (a, b, c, d, e, f, g)
+
 instance (IsIpld a, IsIpld b) => IsIpld (Either a b)
+
+-- TODO:
+--   * serialize lists as arrays
+--   * strings as strings
 instance IsIpld a => IsIpld [a]
 instance IsIpld a => IsIpld (Maybe a)
 
@@ -564,6 +571,7 @@ instance (GFromIpld f, GFromIpld g) => GFromIpld (f :*: g) where
     _ -> Nothing
 
 instance (GToIpld f, GToIpld g) => GToIpld (f :+: g) where
+  -- TODO: encoding tags as numbers turns out to maybe be a bad idea
   gToIpld (L1 x) = array [0, gToIpld x]
   gToIpld (R1 x) = array [1, gToIpld x]
 
