@@ -426,7 +426,7 @@ instance IsIpld Char where
     _ -> Nothing
 
 #define IntInstance(I)                 \
-instance IsIpld (I) where {            \
+instance IsIpld I where {            \
   toIpld = DagNumber . fromIntegral;   \
   fromIpld = \case {                   \
     DagNumber n -> toBoundedInteger n; \
@@ -445,7 +445,7 @@ IntInstance(Word32)
 IntInstance(Word64)
 
 #define FloatingInstance(I)                       \
-instance IsIpld (I) where {                       \
+instance IsIpld I where {                       \
   toIpld = DagNumber . fromFloatDigits;           \
   fromIpld = \case {                              \
     DagNumber n -> case toBoundedRealFloat n of { \
