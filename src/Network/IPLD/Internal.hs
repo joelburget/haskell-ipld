@@ -59,6 +59,8 @@ import           Data.Data
 import           Data.Functor.Identity
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
+import           Data.HashSet (HashSet)
+import qualified Data.HashSet as HashSet
 import           Data.Hashable
 import           Data.Int
 import           Data.Maybe (fromMaybe)
@@ -76,6 +78,7 @@ import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 import qualified Data.Vector as V
+import qualified Data.Vector.Mutable as VM
 
 import           Data.Attoparsec.Text
 import qualified Data.Attoparsec.ByteString as ABS
@@ -418,7 +421,7 @@ instance IsIpld Value where
   toIpld = id
   fromIpld = Just
 
-instance IsIpld Bool where
+instance IsIpld Bool
 instance IsIpld Char where
   toIpld c = TextValue (T.pack [c])
   fromIpld = \case
@@ -426,7 +429,7 @@ instance IsIpld Char where
     _ -> Nothing
 
 #define IntInstance(I)                 \
-instance IsIpld I where {            \
+instance IsIpld I where {              \
   toIpld = DagNumber . fromIntegral;   \
   fromIpld = \case {                   \
     DagNumber n -> toBoundedInteger n; \
@@ -445,7 +448,7 @@ IntInstance(Word32)
 IntInstance(Word64)
 
 #define FloatingInstance(I)                       \
-instance IsIpld I where {                       \
+instance IsIpld I where {                         \
   toIpld = DagNumber . fromFloatDigits;           \
   fromIpld = \case {                              \
     DagNumber n -> case toBoundedRealFloat n of { \
@@ -468,32 +471,146 @@ instance IsIpld Text where
     TextValue str -> Just str
     _             -> Nothing
 
--- instance IsIpld a => IsIpld (Vector a)
--- instance IsIpld a => IsIpld (HashSet a)
+instance {-# OVERLAPPING #-} IsIpld String where
+  toIpld = TextValue . T.pack
+  fromIpld = \case
+    TextValue t -> Just (T.unpack t)
+    _ -> Nothing
+
+instance (IsIpld a, Eq a, Hashable a) => IsIpld (HashSet a) where
+  toIpld = DagArray . fmap toIpld . V.fromList . HashSet.toList
+  fromIpld = \case
+    DagArray v -> HashSet.fromList . V.toList <$> (sequence (fromIpld <$> v))
+    _ -> Nothing
 
 -- TODO IsIpldKey?
--- instance IsIpld a => IsIpld (HashMap Text a)
--- instance IsIpld a => IsIpld (Map Text a)
+instance IsIpld a => IsIpld (HashMap Text a) where
+  toIpld = DagObject . fmap toIpld
+  fromIpld = \case
+    DagObject o -> sequence $ fromIpld <$> o
+    _ -> Nothing
 
 instance IsIpld ()
 
 -- TODO: serialize tuples as arrays
-instance (IsIpld a, IsIpld b) => IsIpld (a, b)
-instance (IsIpld a, IsIpld b, IsIpld c) => IsIpld (a, b, c)
-instance (IsIpld a, IsIpld b, IsIpld c, IsIpld d) => IsIpld (a, b, c, d)
+instance (IsIpld a, IsIpld b) => IsIpld (a, b) where
+  toIpld (a, b) = DagArray $ V.create $ do
+    mv <- VM.unsafeNew 2
+    VM.unsafeWrite mv 0 (toIpld a)
+    VM.unsafeWrite mv 1 (toIpld b)
+    return mv
+  {-# INLINE toIpld #-}
+
+  fromIpld = \case
+    DagArray (V.toList -> [a, b]) -> (,) <$> fromIpld a <*> fromIpld b
+    _ -> Nothing
+  {-# INLINE fromIpld #-}
+
+instance (IsIpld a, IsIpld b, IsIpld c) => IsIpld (a, b, c) where
+  toIpld (a, b, c) = DagArray $ V.create $ do
+    mv <- VM.unsafeNew 3
+    VM.unsafeWrite mv 0 (toIpld a)
+    VM.unsafeWrite mv 1 (toIpld b)
+    VM.unsafeWrite mv 2 (toIpld c)
+    return mv
+  {-# INLINE toIpld #-}
+
+  fromIpld = \case
+    DagArray (V.toList -> [a, b, c]) ->
+      (,,) <$> fromIpld a <*> fromIpld b <*> fromIpld c
+    _ -> Nothing
+  {-# INLINE fromIpld #-}
+
+instance (IsIpld a, IsIpld b, IsIpld c, IsIpld d) => IsIpld (a, b, c, d) where
+  toIpld (a, b, c, d) = DagArray $ V.create $ do
+    mv <- VM.unsafeNew 4
+    VM.unsafeWrite mv 0 (toIpld a)
+    VM.unsafeWrite mv 1 (toIpld b)
+    VM.unsafeWrite mv 2 (toIpld c)
+    VM.unsafeWrite mv 3 (toIpld d)
+    return mv
+  {-# INLINE toIpld #-}
+
+  fromIpld = \case
+    DagArray (V.toList -> [a, b, c, d]) ->
+      (,,,) <$> fromIpld a <*> fromIpld b <*> fromIpld c <*> fromIpld d
+    _ -> Nothing
+  {-# INLINE fromIpld #-}
+
 instance (IsIpld a, IsIpld b, IsIpld c, IsIpld d, IsIpld e)
-  => IsIpld (a, b, c, d, e)
+  => IsIpld (a, b, c, d, e) where
+  toIpld (a, b, c, d, e) = DagArray $ V.create $ do
+    mv <- VM.unsafeNew 5
+    VM.unsafeWrite mv 0 (toIpld a)
+    VM.unsafeWrite mv 1 (toIpld b)
+    VM.unsafeWrite mv 2 (toIpld c)
+    VM.unsafeWrite mv 3 (toIpld d)
+    VM.unsafeWrite mv 4 (toIpld e)
+    return mv
+  {-# INLINE toIpld #-}
+
+  fromIpld = \case
+    DagArray (V.toList -> [a, b, c, d, e]) ->
+      (,,,,) <$> fromIpld a <*> fromIpld b <*> fromIpld c <*> fromIpld d
+             <*> fromIpld e
+    _ -> Nothing
+  {-# INLINE fromIpld #-}
+
 instance (IsIpld a, IsIpld b, IsIpld c, IsIpld d, IsIpld e, IsIpld f)
-  => IsIpld (a, b, c, d, e, f)
+  => IsIpld (a, b, c, d, e, f) where
+  toIpld (a, b, c, d, e, f) = DagArray $ V.create $ do
+    mv <- VM.unsafeNew 6
+    VM.unsafeWrite mv 0 (toIpld a)
+    VM.unsafeWrite mv 1 (toIpld b)
+    VM.unsafeWrite mv 2 (toIpld c)
+    VM.unsafeWrite mv 3 (toIpld d)
+    VM.unsafeWrite mv 4 (toIpld e)
+    VM.unsafeWrite mv 5 (toIpld f)
+    return mv
+  {-# INLINE toIpld #-}
+
+  fromIpld = \case
+    DagArray (V.toList -> [a, b, c, d, e, f]) ->
+      (,,,,,) <$> fromIpld a <*> fromIpld b <*> fromIpld c <*> fromIpld d
+              <*> fromIpld e <*> fromIpld f
+    _ -> Nothing
+  {-# INLINE fromIpld #-}
+
 instance (IsIpld a, IsIpld b, IsIpld c, IsIpld d, IsIpld e, IsIpld f, IsIpld g)
-  => IsIpld (a, b, c, d, e, f, g)
+  => IsIpld (a, b, c, d, e, f, g) where
+  toIpld (a, b, c, d, e, f, g) = DagArray $ V.create $ do
+    mv <- VM.unsafeNew 7
+    VM.unsafeWrite mv 0 (toIpld a)
+    VM.unsafeWrite mv 1 (toIpld b)
+    VM.unsafeWrite mv 2 (toIpld c)
+    VM.unsafeWrite mv 3 (toIpld d)
+    VM.unsafeWrite mv 4 (toIpld e)
+    VM.unsafeWrite mv 5 (toIpld f)
+    VM.unsafeWrite mv 6 (toIpld g)
+    return mv
+  {-# INLINE toIpld #-}
+
+  fromIpld = \case
+    DagArray (V.toList -> [a, b, c, d, e, f, g]) ->
+      (,,,,,,) <$> fromIpld a <*> fromIpld b <*> fromIpld c <*> fromIpld d
+               <*> fromIpld e <*> fromIpld f <*> fromIpld g
+    _ -> Nothing
+  {-# INLINE fromIpld #-}
 
 instance (IsIpld a, IsIpld b) => IsIpld (Either a b)
 
--- TODO:
---   * serialize lists as arrays
---   * strings as strings
-instance IsIpld a => IsIpld [a]
+instance IsIpld a => IsIpld [a] where
+  toIpld = DagArray . V.fromList . fmap toIpld
+  fromIpld = \case
+    DagArray v -> sequence $ fromIpld <$> V.toList v
+    _ -> Nothing
+
+instance IsIpld a => IsIpld (Vector a) where
+  toIpld = DagArray . fmap toIpld
+  fromIpld = \case
+    DagArray v -> sequence $ fromIpld <$> v
+    _ -> Nothing
+
 instance IsIpld a => IsIpld (Maybe a)
 
 instance IsIpld Cid where
@@ -572,6 +689,7 @@ instance (GFromIpld f, GFromIpld g) => GFromIpld (f :*: g) where
 
 instance (GToIpld f, GToIpld g) => GToIpld (f :+: g) where
   -- TODO: encoding tags as numbers turns out to maybe be a bad idea
+  -- ... are chars a better encoding? even better... constructor names?
   gToIpld (L1 x) = array [0, gToIpld x]
   gToIpld (R1 x) = array [1, gToIpld x]
 
