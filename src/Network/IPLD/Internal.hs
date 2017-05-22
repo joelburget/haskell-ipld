@@ -484,7 +484,7 @@ instance IsIpld Scientific where
 instance (IsIpld a, Eq a, Hashable a) => IsIpld (HashSet a) where
   toIpld = DagArray . fmap toIpld . V.fromList . HashSet.toList
   fromIpld = \case
-    DagArray v -> HashSet.fromList . V.toList <$> (sequence (fromIpld <$> v))
+    DagArray v -> HashSet.fromList . V.toList <$> sequence (fromIpld <$> v)
     _ -> Nothing
 
 -- TODO IsIpldKey?
