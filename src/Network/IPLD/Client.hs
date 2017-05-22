@@ -1,9 +1,13 @@
+{-# language GeneralizedNewtypeDeriving #-}
 {-# language OverloadedStrings #-}
 module Network.IPLD.Client
-  ( get
+  ( Channel
+  , get
   , put
   , pin
   , unpin
+  , publish
+  , subscribe
   ) where
 
 import qualified Control.Foldl as Fold
@@ -48,5 +52,23 @@ unpin cid = do
   case exitCode of
     ExitFailure i -> pure (Left $ "bad exit code: " ++ show i)
     ExitSuccess -> pure (Right ())
+
+newtype Channel = Channel Text
+  deriving (Eq, Ord, Show, Monoid, IsString)
+
+publish :: Channel -> Text -> IO (Either String ())
+publish (Channel chan) msg = do
+  -- stick a newline on the end so it shows up as a distinct line on the other
+  -- end
+  let cmd = "ipfs pubsub pub " <> chan <> " " <> msg <> "\n"
+  exitCode <- TB.shell cmd empty
+  case exitCode of
+    ExitFailure i -> pure (Left $ "bad exit code: " ++ show i)
+    ExitSuccess -> pure (Right ())
+
+subscribe :: Channel -> Shell Line
+subscribe (Channel chan) =
+  let cmd = "ipfs pubsub sub " <> chan
+  in inshell cmd mempty
 
 -- checkIpfs :: IO IpfsStatus
