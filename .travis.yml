@@ -35,7 +35,7 @@ matrix:
 
 before_install:
  - GO_IPFS_DIR="${TRAVIS_BUILD_DIR}/../go-ipfs"
- - GO_IPFS_ARCHIVE_BASENAME="go-ipfs_v0.4.9-rc2_linux-amd64.tar.gz"
+ - GO_IPFS_ARCHIVE_BASENAME="go-ipfs_v0.4.9_linux-amd64.tar.gz"
  - GO_IPFS_ARCHIVE_FULLPATH="${GO_IPFS_DIR}/${GO_IPFS_ARCHIVE_BASENAME}"
  - GO_IPFS_CMD_BASENAME="ipfs"
  - GO_IPFS_CMD="${GO_IPFS_DIR}/go-ipfs/${GO_IPFS_CMD_BASENAME}"
@@ -61,7 +61,7 @@ install:
    else
      echo "${GO_IPFS_ARCHIVE_FULLPATH} does not exist, downloading"
      mkdir -p "${GO_IPFS_DIR}"
-     travis_retry wget --quiet -O "${GO_IPFS_ARCHIVE_FULLPATH}" "https://ipfs.io/ipns/dist.ipfs.io/go-ipfs/v0.4.9-rc2/${GO_IPFS_ARCHIVE_BASENAME}"
+     travis_retry wget --quiet -O "${GO_IPFS_ARCHIVE_FULLPATH}" "https://ipfs.io/ipns/dist.ipfs.io/go-ipfs/v0.4.9/${GO_IPFS_ARCHIVE_BASENAME}"
    fi
  - |
    if [ -x "${GO_IPFS_CMD}" ] ; then
