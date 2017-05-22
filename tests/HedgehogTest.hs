@@ -1,13 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
-module Main (main) where
+module HedgehogTest (main) where
 
 import           Control.Applicative
-import qualified Control.Foldl as Fold
-import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.ByteString as ABS
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString as SBS
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Map as Map
@@ -18,7 +14,6 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import           Data.Binary.Serialise.CBOR (serialise, deserialise)
 import           Turtle
-import qualified Turtle.Bytes as TB
 import           Data.Scientific
 import           System.Exit (exitFailure)
 
@@ -87,6 +82,21 @@ prop_serialize_round_trip = property $ do
 -- prop_traverse_graft :: Property
 
 -- prop_graft_hash :: Property
+
+-- | Check that @toIpld = id@ for a @Value@
+prop_toIpld_fix :: Property
+prop_toIpld_fix = property $ do
+  val <- forAll genValue
+  toIpld (toIpld val) === toIpld val
+
+-- | Check that `fromIpld . toIpld = Just`
+--
+-- TODO: this would be a much better test if we had a generator for @Generic@
+-- or arbitrary @IsIpld@ values, since @(gen)Value@ is a pretty safe domain.
+prop_ipld_round_trip :: Property
+prop_ipld_round_trip = property $ do
+  val <- forAll genValue
+  fromIpld (toIpld val) === Just val
 
 main :: IO ()
 main = do

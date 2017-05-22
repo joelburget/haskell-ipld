@@ -1,4 +1,5 @@
 {-# language CPP #-}
+{-# language DataKinds #-}
 {-# language DefaultSignatures #-}
 {-# language DeriveDataTypeable #-}
 {-# language DeriveGeneric #-}
@@ -7,6 +8,7 @@
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language LambdaCase #-}
 {-# language OverloadedStrings #-}
+{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language TypeOperators #-}
 {-# language TypeSynonymInstances #-}
@@ -48,7 +50,7 @@ import           Control.Applicative
 import           Control.Lens
   ((^?), Index, IxValue, Ixed(..), transformM, Plated, rewriteM)
 import           Control.Monad (when)
--- import           Control.Monad.State
+import           Control.Monad.State.Strict
 -- import           Control.Monad.Writer
 import qualified Data.Aeson as Aeson
 import           Data.ByteString.Base58
@@ -72,7 +74,7 @@ import           Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import           Data.Vector (Vector)
 import           Data.Word
 import           GHC.Generics
-import           Text.Read
+import           Text.Read hiding (get)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Char8 as B8
@@ -201,16 +203,6 @@ instance Serialise Value where
 
 instance IsString Value where
   fromString = TextValue . fromString
-
--- TODO: think about whether we want this instance.
---
--- Inspired by Turtle.Shell's instance:
--- https://hackage.haskell.org/package/turtle-1.3.3/docs/src/Turtle-Shell.html#line-159
-instance Num Value where
-    fromInteger = DagNumber . fromInteger
-
-    -- (+) = (<|>)
-    -- (*) = (<>)
 
 data Row
   -- TODO: should LinkRow exist?
@@ -475,7 +467,19 @@ instance {-# OVERLAPPING #-} IsIpld String where
   toIpld = TextValue . T.pack
   fromIpld = \case
     TextValue t -> Just (T.unpack t)
-    _ -> Nothing
+    _           -> Nothing
+
+instance IsIpld MerkleLink where
+  toIpld = LinkValue
+  fromIpld = \case
+    LinkValue l -> Just l
+    _           -> Nothing
+
+instance IsIpld Scientific where
+  toIpld = DagNumber
+  fromIpld = \case
+    DagNumber s -> Just s
+    _           -> Nothing
 
 instance (IsIpld a, Eq a, Hashable a) => IsIpld (HashSet a) where
   toIpld = DagArray . fmap toIpld . V.fromList . HashSet.toList
@@ -653,49 +657,130 @@ instance GToIpld U1 where
 instance GFromIpld U1 where
   gFromIpld = \case
     DagArray (V.null -> True) -> pure U1
-    _ -> Nothing
+    _                         -> Nothing
 
 instance GToIpld a => GToIpld (M1 i c a) where
-  -- Metadata (constructor name, etc) is skipped
   gToIpld = gToIpld . unM1
 
 instance GFromIpld a => GFromIpld (M1 i c a) where
   gFromIpld = M1 <$$> gFromIpld
 
-instance IsIpld a => GToIpld (K1 i a) where
-  gToIpld (K1 a) = array
-    [ DagNumber 0
-    , toIpld a
-    ]
+instance IsIpld f => GToIpld (K1 i f) where
+  gToIpld = toIpld . unK1
 
-instance IsIpld a => GFromIpld (K1 i a) where
-  gFromIpld = \case
-    DagArray (V.toList -> [DagNumber 0, a]) -> K1 <$> fromIpld a
-    _                  -> Nothing
+instance IsIpld f => GFromIpld (K1 i f) where
+  gFromIpld = K1 <$$> fromIpld
 
-instance (GToIpld f, GToIpld g) => GToIpld (f :*: g) where
-  -- Products are serialised as N-tuples with 0 constructor tag
-  gToIpld (f :*: g) = array
-    [ gToIpld f
-    , gToIpld g
-    ]
+instance (GIsIpldProd f, GIsIpldProd g) => GToIpld (f :*: g) where
+  gToIpld (f :*: g) = DagArray $ toIpldSeq f <> toIpldSeq g
 
-instance (GFromIpld f, GFromIpld g) => GFromIpld (f :*: g) where
-  gFromIpld = \case
-    DagArray (V.toList -> [fs, gs]) -> (:*:)
-      <$> gFromIpld fs
-      <*> gFromIpld gs
-    _ -> Nothing
+instance (GIsIpldProd f, GIsIpldProd g) => GFromIpld (f :*: g) where
+  gFromIpld ipld = do
+    DagArray fields <- pure ipld
+    let action = (:*:) <$> gFromIpldSeq <*> gFromIpldSeq
+    evalStateT action fields
 
-instance (GToIpld f, GToIpld g) => GToIpld (f :+: g) where
-  -- TODO: encoding tags as numbers turns out to maybe be a bad idea
-  -- ... are chars a better encoding? even better... constructor names?
-  gToIpld (L1 x) = array [0, gToIpld x]
-  gToIpld (R1 x) = array [1, gToIpld x]
+instance (GIsIpldSum f, GIsIpldSum g) => GToIpld (f :+: g) where
+  gToIpld a = DagArray $
+    V.singleton (DagNumber (fromIntegral (conNumber a))) <> toIpldSum a
 
-instance (GFromIpld f, GFromIpld g) => GFromIpld (f :+: g) where
-  gFromIpld (DagArray (V.toList -> [tag, body])) = case tag of
-    0 -> L1 <$> gFromIpld body
-    1 -> R1 <$> gFromIpld body
-    _ -> Nothing
-  gFromIpld _ = Nothing
+instance (GIsIpldSum f, GIsIpldSum g) => GFromIpld (f :+: g) where
+  gFromIpld ipld = do
+    DagArray v <- pure ipld
+    let len = V.length v
+    when (len == 0) $ fail "Empty list encountered for sum type"
+    DagNumber n <- pure $ V.head v
+    n' <- toBoundedInteger n
+    trueLen <- fieldsForCon (Proxy :: Proxy (f :+: g)) n'
+    when (len /= fromIntegral trueLen + 1) $ fail $
+      "Number of fields mismatch: expected="++show trueLen++" got="++show len
+    evalStateT (fromIpldSum n') (V.tail v)
+
+-- | Serialization of product types
+class GIsIpldProd f where
+  -- | Number of fields in product type
+  nFields   :: Proxy f -> Word
+  -- | Encode sequentially
+  toIpldSeq :: f a -> Vector Value
+  -- | Decode sequentially
+  gFromIpldSeq :: StateT (Vector Value) Maybe (f a)
+
+instance (GIsIpldProd f, GIsIpldProd g) => GIsIpldProd (f :*: g) where
+  nFields _ = nFields (Proxy :: Proxy f) + nFields (Proxy :: Proxy g)
+  toIpldSeq (f :*: g) = toIpldSeq f <> toIpldSeq g
+  gFromIpldSeq = (:*:) <$> gFromIpldSeq <*> gFromIpldSeq
+
+instance GIsIpldProd U1 where
+  -- N.B. Could only be reached when one of constructors in sum type
+  --      don't have parameters
+  nFields   _  = 0
+  toIpldSeq _  = mempty
+  gFromIpldSeq = pure U1
+
+instance IsIpld a => GIsIpldProd (K1 i a) where
+  -- Ordinary field
+  nFields    _     = 1
+  toIpldSeq (K1 f) = V.singleton (toIpld f)
+  gFromIpldSeq     = do
+    vals <- get
+    put (V.tail vals)
+    -- TODO: safe
+    let Just result = fromIpld (V.head vals)
+    pure $ K1 result
+
+instance (i ~ S, GIsIpldProd f) => GIsIpldProd (M1 i c f) where
+  -- We skip metadata
+  nFields     _     = 1
+  toIpldSeq  (M1 f) = toIpldSeq f
+  gFromIpldSeq      = M1 <$> gFromIpldSeq
+
+-- | Serialization of sum types
+class GIsIpldSum f where
+  -- | Number of constructor of given value
+  conNumber   :: f a -> Word
+  -- | Number of fields of given value
+  numOfFields :: f a -> Word
+  -- | Encode field
+  toIpldSum   :: f a  -> Vector Value
+
+  -- | Decode field
+  fromIpldSum   :: Word -> StateT (Vector Value) Maybe (f a)
+  -- | Number of constructors
+  nConstructors :: Proxy f -> Word
+  -- | Number of fields for given constructor number
+  fieldsForCon  :: Proxy f -> Word -> Maybe Word
+
+instance (GIsIpldSum f, GIsIpldSum g) => GIsIpldSum (f :+: g) where
+  conNumber = \case
+    L1 f -> conNumber f
+    R1 g -> conNumber g + nConstructors (Proxy :: Proxy f)
+  numOfFields = \case
+    L1 f -> numOfFields f
+    R1 g -> numOfFields g
+  toIpldSum = \case
+    L1 f -> toIpldSum f
+    R1 g -> toIpldSum g
+
+  nConstructors _ = nConstructors (Proxy :: Proxy f)
+                  + nConstructors (Proxy :: Proxy g)
+
+  fieldsForCon _ n | n < nL    = fieldsForCon (Proxy :: Proxy f) n
+                   | otherwise = fieldsForCon (Proxy :: Proxy g) (n - nL)
+    where
+      nL = nConstructors (Proxy :: Proxy f)
+
+  fromIpldSum nCon | nCon < nL = L1 <$> fromIpldSum nCon
+                   | otherwise = R1 <$> fromIpldSum (nCon - nL)
+    where
+      nL = nConstructors (Proxy :: Proxy f)
+
+instance (i ~ C, GIsIpldProd f) => GIsIpldSum (M1 i c f) where
+  conNumber    _     = 0
+  numOfFields  _     = nFields (Proxy :: Proxy f)
+  toIpldSum   (M1 f) = toIpldSeq f
+
+  nConstructors  _ = 1
+  fieldsForCon _ 0 = return $ nFields (Proxy :: Proxy f)
+  fieldsForCon _ _ = fail "Bad constructor number"
+  fromIpldSum 0    = M1 <$> gFromIpldSeq
+  fromIpldSum _    = fail "bad constructor number"

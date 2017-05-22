@@ -1,6 +1,7 @@
-{-# language OverloadedStrings #-}
+{-# language DeriveGeneric #-}
 {-# language MultiWayIf #-}
-module Main (main) where
+{-# language OverloadedStrings #-}
+module UnitTest where
 
 import Network.IPLD
 import Network.IPLD.Lens
@@ -9,7 +10,8 @@ import           Control.Lens hiding ((.=))
 import           Data.Binary.Serialise.CBOR
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Lazy (toStrict)
--- import           Data.Text (Text)
+import           Data.Text (Text)
+import           GHC.Generics
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import qualified Data.Attoparsec.ByteString as ABS
@@ -29,6 +31,18 @@ putNullC = compact . putNull
 
 -- putNullH :: IsIpld a => a -> Text
 -- putNullH = human . putNull
+
+data Test
+  = Alt1
+  | Alt2 Int
+  | Alt3
+    { _field1 :: Text
+    , _field2 :: Test
+    }
+  | Alt4 Int Int Int
+  deriving (Generic, Show, Eq)
+
+instance IsIpld Test
 
 tests :: TestTree
 tests = testGroup "ipld"
@@ -157,5 +171,44 @@ tests = testGroup "ipld"
               ]
         in actual @?= expected
       ]
+
+
+  , let id' :: IsIpld a => a -> Maybe a
+        id' = fromIpld . toIpld
+
+        test1, test2, test3, test4, test5 :: Test
+        test1 = Alt1
+        test2 = Alt2 3
+        test3 = Alt3 "joel" Alt1
+        test4 = Alt3 "joel" (Alt3 "burget" test1)
+        test5 = Alt4 1 2 3
+    in testGroup "toIpld / fromIpld"
+         [ testCase "toIpld test1" $
+             toIpld test1 @?= array [DagNumber 0]
+         , testCase "toIpld test2" $
+             toIpld test2 @?= array [DagNumber 1, DagNumber 3]
+         , testCase "toIpld test3" $
+             toIpld test3 @?= array [DagNumber 2, "joel", toIpld test1]
+         , testCase "toIpld test4" $
+             toIpld test4 @?= array
+               [ DagNumber 2
+               , TextValue "joel"
+               , array [DagNumber 2, "burget", toIpld test1]
+               ]
+         , testCase "toIpld test5" $
+             toIpld test5 @?=
+               array [DagNumber 3, DagNumber 1, DagNumber 2, DagNumber 3]
+
+         , testCase "fromIpld . toIpld (test1)" $
+             id' test1 @?= Just test1
+         , testCase "fromIpld . toIpld (test2)" $
+             id' test2 @?= Just test2
+         , testCase "fromIpld . toIpld (test3)" $
+             id' test3 @?= Just test3
+         , testCase "fromIpld . toIpld (test4)" $
+             id' test4 @?= Just test4
+         , testCase "fromIpld . toIpld (test5)" $
+             id' test5 @?= Just test5
+         ]
 
   ]
