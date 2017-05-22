@@ -1,7 +1,7 @@
 {-# language DeriveGeneric #-}
 {-# language MultiWayIf #-}
 {-# language OverloadedStrings #-}
-module UnitTest where
+module Main (main) where
 
 import Network.IPLD
 import Network.IPLD.Lens

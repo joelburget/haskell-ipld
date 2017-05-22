@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
-module HedgehogTest (main) where
+module Main (main) where
 
 import           Control.Applicative
 import qualified Data.Attoparsec.ByteString as ABS
