@@ -31,6 +31,7 @@ import           Data.Word (Word8)
 import           GHC.Generics
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Base16 as Hex
 
 import           Data.Binary.Serialise.CBOR.Class
@@ -269,7 +270,10 @@ data Cid = Cid
   -- Multicodec
   CodecId
   Multihash
-  deriving (Eq, Show, Generic, Hashable, Typeable, Data, Ord)
+  deriving (Eq, Generic, Hashable, Typeable, Data, Ord)
+
+instance Show Cid where
+  show = B8.unpack . compact
 
 -- TODO: use http://hackage.haskell.org/package/concise-0.1.0.0/docs/Control-Lens-Cons-Extras.html ?
 toByteString :: BA.ByteArrayAccess a => a -> ByteString
