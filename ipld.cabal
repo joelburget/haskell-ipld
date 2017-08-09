@@ -31,7 +31,7 @@ library
     vector,
     text,
     attoparsec,
-    binary-serialise-cbor,
+    cborg == 0.1.*,
     bytestring,
     byteable,
     cryptonite,
