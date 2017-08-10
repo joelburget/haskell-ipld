@@ -15,6 +15,10 @@ module Network.IPLD.Cid
   , Cid(..)
   , w8ToI -- TODO: don't export
   , mkCid
+  , encodeMultihash
+  , decodeMultihash
+  , encodeCid
+  , decodeCid
   ) where
 
 import           Crypto.Hash
@@ -34,8 +38,8 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Base16 as Hex
 
-import           Data.Binary.Serialise.CBOR.Class
-import           Data.Binary.Serialise.CBOR.Decoding
+import           Codec.CBOR.Decoding
+import           Codec.CBOR.Encoding
 
 -- pattern Identity_MultibaseI :: Int
 -- pattern Identity_MultibaseI = 0
@@ -256,13 +260,15 @@ instance HumanOrCompact Multihash where
          , bs'
          )
 
-instance Serialise Multihash where
-  encode = encode . compact
-  decode = do
-    fun <- decodeInt
-    size <- decodeInt
-    bytes <- decodeBytes
-    pure (Multihash (toEnum fun) (toEnum size) bytes)
+decodeMultihash :: Decoder s Multihash
+decodeMultihash = do
+  fun <- decodeInt
+  size <- decodeInt
+  bytes <- decodeBytes
+  pure (Multihash (toEnum fun) (toEnum size) bytes)
+
+encodeMultihash :: Multihash -> Encoding
+encodeMultihash = encodeBytes . compact
 
 data Cid = Cid
   Multibase
@@ -308,11 +314,13 @@ instance HumanOrCompact Cid where
         rest = BS.pack [version] <> compact codec <> compact multihash
     in base' <> encodeBase58 bitcoinAlphabet rest
 
-instance Serialise Cid where
-  encode = encode . compact
-  decode = do
-    base <- decodeInt
-    version <- decodeInt
-    codec <- decodeInt
-    bytes <- decode
-    pure (Cid (toEnum base) (toEnum version) (toEnum codec) bytes)
+encodeCid :: Cid -> Encoding
+encodeCid = encodeBytes . compact
+
+decodeCid :: Decoder s Cid
+decodeCid = do
+  base <- decodeInt
+  version <- decodeInt
+  codec <- decodeInt
+  bytes <- decodeMultihash
+  pure (Cid (toEnum base) (toEnum version) (toEnum codec) bytes)

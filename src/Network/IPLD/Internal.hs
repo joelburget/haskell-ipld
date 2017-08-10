@@ -1,3 +1,4 @@
+{-# language BangPatterns #-}
 {-# language CPP #-}
 {-# language DataKinds #-}
 {-# language DefaultSignatures #-}
@@ -42,6 +43,10 @@ module Network.IPLD.Internal
   , linkM
   , linkToM
   , linkToV
+
+  -- encoding  / decoding
+  , encodeValue
+  , decodeValue
   ) where
 
 import Prelude hiding (takeWhile)
@@ -54,7 +59,6 @@ import           Control.Monad.State.Strict
 -- import           Control.Monad.Writer
 import qualified Data.Aeson as Aeson
 import           Data.ByteString.Base58
-import           Data.ByteString.Lazy (toStrict)
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString as SBS
 import           Data.Data
@@ -85,9 +89,10 @@ import qualified Data.Vector.Mutable as VM
 import           Data.Attoparsec.Text
 import qualified Data.Attoparsec.ByteString as ABS
 
-import           Data.Binary.Serialise.CBOR
-import           Data.Binary.Serialise.CBOR.Encoding
-import           Data.Binary.Serialise.CBOR.Decoding
+-- import           Data.Binary.Serialise.CBOR
+import           Codec.CBOR.Decoding
+import           Codec.CBOR.Encoding
+import           Codec.CBOR.Write
 
 import Network.IPLD.Cid
 
@@ -152,54 +157,81 @@ jsonDecode = fromAeson <$$> Aeson.decode' . LBS.fromStrict
 newtype MerkleLink = MerkleLink Cid -- MultihashDigest
   deriving (Eq, Show, Generic, Hashable, Typeable, Data)
 
-instance Serialise MerkleLink where
-  encode (MerkleLink loc) = encodeTag cborTagLink <> encode loc
-  decode = decodeTag *> decode
+encodeMerkleLink :: MerkleLink -> Encoding
+encodeMerkleLink (MerkleLink loc) = encodeTag cborTagLink <> encodeCid loc
 
-decodeIndefList :: Decoder s Value
-decodeIndefList = DagArray . V.fromList <$> decode
+decodeMerkleLink :: Decoder s MerkleLink
+decodeMerkleLink = MerkleLink <$> (decodeTag *> decodeCid)
+
+-- decodeListN, decodeListIndefLen, decodeMapN taken from Codec.CBOR.Term
+decodeListN :: Int -> [Value] -> Decoder s Value
+decodeListN !n acc =
+  case n of
+    0 -> return $! DagArray (V.reverse (V.fromList acc))
+    _ -> do !t <- decodeValue
+            decodeListN (n-1) (t : acc)
+
+decodeListIndefLen :: [Value] -> Decoder s Value
+decodeListIndefLen acc = do
+  stop <- decodeBreakOr
+  if stop then return $! DagArray (V.reverse (V.fromList acc))
+          else do !tm <- decodeValue
+                  decodeListIndefLen (tm : acc)
 
 decodeNumberIntegral :: Decoder s Value
-decodeNumberIntegral = DagNumber . fromInteger <$> decode
+decodeNumberIntegral = DagNumber . fromInteger <$> decodeInteger
 
 decodeNumberFloating :: Decoder s Value
-decodeNumberFloating = DagNumber . fromFloatDigits <$>
-  (decode :: Decoder s Double)
+decodeNumberFloating = DagNumber . fromFloatDigits <$> decodeDouble
 
-instance Serialise Value where
-  encode = \case
-    LinkValue lnk  -> encode lnk
-    DagObject hmap -> encode hmap
-    DagArray  arr  -> encode arr
-    TextValue text -> encode text
-    -- This instance is taken from a cbor example
-    DagNumber num  -> case floatingOrInteger num of
-      Left  d -> encode (d :: Double)
-      Right i -> encode (i :: Integer)
-    DagBool   bool -> encode bool
-    Null           -> encodeNull
+decodeMapN :: Int -> [(Text, Value)] -> Decoder s Value
+decodeMapN !n acc =
+    case n of
+      0 -> return $! DagObject (HashMap.fromList acc)
+      _ -> do !tm   <- decodeString
+              !tm'  <- decodeValue
+              decodeMapN (n-1) ((tm, tm') : acc)
 
-  decode = do
-    tkty <- peekTokenType
-    case tkty of
-      TypeTag -> do
-        _tag <- decodeTag
-        LinkValue <$> decode
-      TypeString  -> TextValue <$> decode
-      TypeListLen -> DagArray  <$> decode
-      TypeListLenIndef -> decodeIndefList
-      TypeMapLen  -> DagObject <$> decode
-      TypeBool    -> DagBool   <$> decodeBool
-      TypeNull    -> Null      <$  decodeNull
+encodeValue :: Value -> Encoding
+encodeValue = \case
+  LinkValue lnk  -> encodeMerkleLink lnk
+  DagObject hmap ->
+    let ts = HashMap.toList hmap
+    in encodeMapLen (fromIntegral $ length ts)
+       <> mconcat [ encodeString t <> encodeValue t' | (t, t') <- ts ]
+  DagArray  arr  -> encodeListLen (fromIntegral $ length arr)
+                 <> mconcat [ encodeValue t | t <- V.toList arr ]
+  TextValue text -> encodeString text
+  -- This instance is taken from a cbor example
+  DagNumber num  -> case floatingOrInteger num of
+    Left  d -> encodeDouble d
+    Right i -> encodeInteger i
+  DagBool   bool -> encodeBool bool
+  Null           -> encodeNull
 
-      TypeUInt    -> decodeNumberIntegral
-      TypeUInt64  -> decodeNumberIntegral
-      TypeNInt    -> decodeNumberIntegral
-      TypeNInt64  -> decodeNumberIntegral
-      TypeInteger -> decodeNumberIntegral
-      TypeFloat64 -> decodeNumberFloating
+decodeValue :: Decoder s Value
+decodeValue = do
+  tkty <- peekTokenType
+  case tkty of
+    TypeTag -> do
+      _tag <- decodeTag
+      LinkValue <$> decodeMerkleLink
+    TypeString  -> TextValue <$> decodeString
+    TypeListLen -> decodeListLen      >>= flip decodeListN []
+    TypeListLen64    -> decodeListLen      >>= flip decodeListN []
+    TypeListLenIndef -> decodeListIndefLen []
+    TypeMapLen  -> decodeMapLen >>= flip decodeMapN []
+    TypeBool    -> DagBool   <$> decodeBool
+    TypeNull    -> Null      <$  decodeNull
 
-      _ -> fail $ "unexpected CBOR token type for IPLD value: " ++ show tkty
+    TypeUInt    -> decodeNumberIntegral
+    TypeUInt64  -> decodeNumberIntegral
+    TypeNInt    -> decodeNumberIntegral
+    TypeNInt64  -> decodeNumberIntegral
+    TypeInteger -> decodeNumberIntegral
+    TypeFloat64 -> decodeNumberFloating
+
+    _ -> fail $ "unexpected CBOR token type for IPLD value: " ++ show tkty
 
 instance IsString Value where
   fromString = TextValue . fromString
@@ -221,7 +253,7 @@ instance Ixed Value where
 instance Plated Value
 
 valueCid :: Value -> Cid
-valueCid = mkCid . toStrict . serialise
+valueCid = mkCid . toStrictByteString . encodeValue
 
 linkToM :: Value -> MerkleLink
 linkToM = MerkleLink . valueCid
@@ -620,10 +652,10 @@ instance IsIpld a => IsIpld (Maybe a)
 instance IsIpld Cid where
   toIpld = TextValue . decodeUtf8 . compact
   fromIpld = \case
-    LinkValue (MerkleLink cid) -> Just cid
-    -- TextValue str -> case ABS.parseOnly parseCid (encodeUtf8 str) of
-    --   Right cid -> Just cid
-    --   Left _err -> Nothing
+    -- LinkValue (MerkleLink cid) -> Just cid
+    TextValue str -> case ABS.parseOnly parseCid (encodeUtf8 str) of
+      Right cid -> Just cid
+      Left _err -> Nothing
     _ -> Nothing
 
 --------------------------------------------------------------------------------

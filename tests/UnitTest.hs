@@ -7,7 +7,8 @@ import Network.IPLD
 import Network.IPLD.Lens
 
 import           Control.Lens hiding ((.=))
-import           Data.Binary.Serialise.CBOR
+import           Codec.CBOR.Encoding
+import           Codec.CBOR.Write
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Lazy (toStrict)
 import           Data.Text (Text)
@@ -24,7 +25,7 @@ main = defaultMain tests
 
 -- "put to /dev/null" (get cid)
 putNull :: IsIpld a => a -> Cid
-putNull = mkCid . toStrict . serialise . toIpld
+putNull = mkCid . toStrictByteString . encodeValue . toIpld
 
 putNullC :: IsIpld a => a -> ByteString
 putNullC = compact . putNull

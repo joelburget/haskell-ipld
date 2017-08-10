@@ -12,7 +12,8 @@ import qualified Data.Vector as V
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-import           Data.Binary.Serialise.CBOR (serialise, deserialise)
+import           Codec.CBOR.Read (deserialiseFromBytes)
+import           Codec.CBOR.Write (toLazyByteString)
 import           Turtle
 import           Data.Scientific
 import           System.Exit (exitFailure)
@@ -76,8 +77,10 @@ prop_matches_ipfs = property $ do
 prop_serialize_round_trip :: Property
 prop_serialize_round_trip = property $ do
   value <- forAll genValue
-  let value' = deserialise $ serialise value
-  value' === value
+  let Right value' = deserialiseFromBytes decodeValue $ toLazyByteString $
+        encodeValue value
+  -- value' === ("", value)
+  snd value' === value
 
 -- prop_traverse_graft :: Property
 
