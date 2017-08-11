@@ -21,5 +21,4 @@ test_script:
 - echo "" | stack --no-terminal build
 - stack test
 - set PATH=C:\Program Files\Git\mingw64\bin;%PATH%
-- curl -ohlint.bat -L https://raw.githubusercontent.com/ndmitchell/hlint/master/misc/appveyor.bat
-- hlint src
+- ps: Invoke-Command ([Scriptblock]::Create((Invoke-WebRequest 'https://raw.githubusercontent.com/ndmitchell/hlint/master/misc/appveyor.ps1').Content)) -ArgumentList @('.')
