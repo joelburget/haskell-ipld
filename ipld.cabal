@@ -26,6 +26,7 @@ library
     Network.IPLD.Internal
     Network.IPLD.Cid
     Network.IPLD.Class
+    Network.IPLD.Patterns
   build-depends:
     base >= 4.8 && <4.11,
     unordered-containers,
