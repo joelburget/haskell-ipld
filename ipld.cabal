@@ -86,7 +86,7 @@ test-suite property-tests
     scientific,
     aeson,
 
-    hedgehog == 0.2.*,
+    hedgehog == 0.5,
     containers,
     turtle,
     aeson,
